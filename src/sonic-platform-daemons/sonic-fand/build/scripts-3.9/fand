@@ -1,0 +1,170 @@
+#!python
+
+"""
+    fand
+    FAN information update daemon for SONiC
+
+    TODO:
+    This daemon will loop to collect PSU related information and then write the information to state DB.
+    Currently it is implemented based on old plugins rather than new platform APIs. So the PSU information just
+    includes three things: number of PSU, PSU presence and PSU status which is supported by old plugins.
+    The loop interval is PSU_INFO_UPDATE_PERIOD_SECS in seconds.
+"""
+
+try:
+    import sys
+    import time
+    import signal
+    import threading
+    from datetime import datetime
+    from swsscommon import swsscommon
+
+    from sonic_py_common import daemon_base, logger
+    from sonic_py_common.daemon_base import DaemonBase
+except ImportError as e:
+    raise ImportError (str(e) + " - required module not found")
+
+#
+# Constants ====================================================================
+#
+SYSLOG_IDENTIFIER = "fand"
+
+PLATFORM_SPECIFIC_MODULE_NAME = "fanutil"
+PLATFORM_SPECIFIC_CLASS_NAME = "FanUtil"
+
+CHASSIS_INFO_TABLE = 'CHASSIS_INFO'
+CHASSIS_INFO_KEY_TEMPLATE = 'chassis {}'
+CHASSIS_INFO_FAN_NUM_FIELD = 'fan_num'
+
+FAN_INFO_UPDATE_PERIOD_SECS = 20
+
+FANUTIL_LOAD_ERROR = 1
+
+FAN_INFO_TABLE = 'FAN_INFO'
+FAN_INFO_KEY = 'FAN{0}'
+FAN_INFO_STATE = 'status'
+FAN_INFO_ROTATION = 'direction'
+FAN_INFO_SPEED = 'speed'
+FAN_INFO_PRESENCE = 'presence'
+FAN_INFO_TIMESTAMP = 'timestamp'
+
+logger = logger.Logger(SYSLOG_IDENTIFIER)
+
+platform_chassis = None
+platform_fanutil = None
+
+#
+# temporary wrappers that are compliable with both new platform api and old-style plugin mode
+def _wrapper_get_num_fan():
+    if platform_chassis is not None:
+        try:
+            return platform_chassis.get_num_fan()
+        except NotImplementedError:
+            pass
+    return platform_fanutil.get_num_fan()
+
+def _wapper_get_fan_info_dict(fan_index):
+    if platform_chassis is not None:
+        try:
+            return platform_chassis.get_fan(fan_index - 1).get_fan_info_dict()
+        except NotImplementedError:
+            pass
+    return platform_fanutil.get_fan_info_dict(fan_index)
+
+#
+# Temp functions ==============================================================
+#
+
+def fan_db_update(fan_tbl, fan_num):
+    fan_info_dict = {}
+    for fan_index in range(1, fan_num + 1):
+        fan_info_dict = _wapper_get_fan_info_dict(fan_index)
+        fvs = swsscommon.FieldValuePairs([(FAN_INFO_STATE, fan_info_dict[FAN_INFO_STATE]),
+                                          (FAN_INFO_ROTATION, fan_info_dict[FAN_INFO_ROTATION]),
+                                          (FAN_INFO_SPEED, fan_info_dict[FAN_INFO_SPEED]),
+                                          (FAN_INFO_PRESENCE, fan_info_dict[FAN_INFO_PRESENCE]),
+                                          (FAN_INFO_TIMESTAMP, datetime.now().strftime('%Y%m%d %H:%M:%S'))
+                                          ])
+        fan_tbl.set(FAN_INFO_KEY.format(fan_index), fvs)
+
+#
+# Daemon =======================================================================
+#
+
+class DaemonFand(DaemonBase):
+    def __init__(self, SYSLOG_IDENTIFIER):
+        DaemonBase.__init__(self, SYSLOG_IDENTIFIER)
+
+        self.stop = threading.Event()
+
+    # Signal handler
+    def signal_handler(self, sig, frame):
+        if sig == signal.SIGHUP:
+            logger.log_info("Caught SIGHUP - ignoring...")
+        elif sig == signal.SIGINT:
+            logger.log_info("Caught SIGINT - exiting...")
+            self.stop.set()
+        elif sig == signal.SIGTERM:
+            logger.log_info("Caught SIGTERM - exiting...")
+            self.stop.set()
+        else:
+            logger.log_warning("Caught unhandled signal '" + sig + "'")
+
+    # Run daemon
+    def run(self):
+        global platform_fanutil
+        global platform_chassis
+
+        logger.log_info("Starting up...")
+
+        # Load new platform api class
+        try:
+            import sonic_platform.platform
+            platform_chassis = sonic_platform.platform.Platform().get_chassis()
+        except Exception as e:
+            logger.log_warning("Failed to load chassis due to {}".format(repr(e)))
+
+        # Load platform-specific fanutil class
+        if platform_chassis is None:
+            try:
+                platform_fanutil = self.load_platform_util(PLATFORM_SPECIFIC_MODULE_NAME, PLATFORM_SPECIFIC_CLASS_NAME)
+            except Exception as e:
+                logger.log_error("Failed to load fanutil: %s" % (str(e)), True)
+                sys.exit(FANUTIL_LOAD_ERROR)
+
+        # Connect to STATE_DB and create fan/chassis info tables
+        state_db = daemon_base.db_connect("STATE_DB")
+        chassis_tbl = swsscommon.Table(state_db, CHASSIS_INFO_TABLE)
+        fan_tbl = swsscommon.Table(state_db, FAN_INFO_TABLE)
+
+        # Post fan number info to STATE_DB
+        fan_num = _wrapper_get_num_fan()
+        fvs = swsscommon.FieldValuePairs([(CHASSIS_INFO_FAN_NUM_FIELD, str(fan_num))])
+        chassis_tbl.set(CHASSIS_INFO_KEY_TEMPLATE.format(3), fvs)
+
+        # Start main loop
+        logger.log_info("Start daemon main loop")
+
+        while not self.stop.wait(FAN_INFO_UPDATE_PERIOD_SECS):
+            fan_db_update(fan_tbl, fan_num)
+
+        logger.log_info("Stop daemon main loop")
+
+        # Delete all the information form DB and then exit
+        for fan_index in range(1, fan_num + 1):
+            fan_key = FAN_INFO_KEY.format(fan_index)
+            fan_tbl._del(fan_key)
+
+        chassis_tbl._del(CHASSIS_INFO_KEY_TEMPLATE.format(3))
+
+        logger.log_info("Shutting down...")
+
+#
+# main =========================================================================
+#
+def main():
+    fand = DaemonFand(SYSLOG_IDENTIFIER)
+    fand.run()
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,1 @@
+cmd_/sonic/platform/marvell-arm64/sonic-platform-asterfusion/common/modules/Module.symvers := sed 's/ko$$/o/' /sonic/platform/marvell-arm64/sonic-platform-asterfusion/common/modules/modules.order | scripts/mod/modpost -m    -o /sonic/platform/marvell-arm64/sonic-platform-asterfusion/common/modules/Module.symvers -e -i Module.symvers   -T -

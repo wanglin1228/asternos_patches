@@ -1,0 +1,23 @@
+Metadata-Version: 1.2
+Name: sonic-fand
+Version: 1.0
+Summary: FAND daemon for SONiC
+Home-page: https://github.com/Azure/sonic-platform-daemons
+Author: SONiC Team
+Author-email: wangzhui@asterfusion.com
+Maintainer: Kevin Wang
+Maintainer-email: kevinw@mellanox.com
+License: Apache 2.0
+Description: UNKNOWN
+Keywords: sonic SONiC fan FAN daemon fand FAND
+Platform: UNKNOWN
+Classifier: Development Status :: 4 - Beta
+Classifier: Environment :: No Input/Output (Daemon)
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Information Technology
+Classifier: Intended Audience :: System Administrators
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Natural Language :: English
+Classifier: Operating System :: POSIX :: Linux
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Topic :: System :: Hardware

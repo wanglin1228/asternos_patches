@@ -1,0 +1,378 @@
+From 776898394514e8112109f0a3f867e75feb927de6 Mon Sep 17 00:00:00 2001
+From: chenxu <chenxu@asterfusion.com>
+Date: Sun, 18 May 2025 20:34:40 -0700
+Subject: [PATCH] suit for asterfusion devices
+
+Signed-off-by: chenxu <chenxu@asterfusion.com>
+---
+ azure-pipelines.yml                   |   3 +
+ sonic-psud/scripts/psud               | 174 +++++++++++++++++++++++---
+ sonic-syseepromd/scripts/syseepromd   |   2 +-
+ sonic-thermalctld/scripts/thermalctld |  71 ++++++++---
+ sonic-xcvrd/xcvrd/xcvrd.py            |   1 +
+ 5 files changed, 218 insertions(+), 33 deletions(-)
+
+diff --git a/azure-pipelines.yml b/azure-pipelines.yml
+index 222e2c3..034f6aa 100644
+--- a/azure-pipelines.yml
++++ b/azure-pipelines.yml
+@@ -50,6 +50,9 @@ parameters:
+     - name: xcvrd
+       root_dir: sonic-xcvrd
+       python3: true
++    - name: fand
++      root_dir: sonic-fand
++      python3: true
+     - name: ycabled
+       root_dir: sonic-ycabled
+       python3: true
+diff --git a/sonic-psud/scripts/psud b/sonic-psud/scripts/psud
+index 3bcae4c..aa36975 100644
+--- a/sonic-psud/scripts/psud
++++ b/sonic-psud/scripts/psud
+@@ -14,10 +14,13 @@ import sys
+ import threading
+ from datetime import datetime
+ 
+-from sonic_platform.psu import Psu
+ from sonic_py_common import daemon_base, logger
+ from swsscommon import swsscommon
+ 
++try:
++    from sonic_platform.psu import Psu
++except:
++    pass
+ 
+ #
+ # Constants ====================================================================
+@@ -78,7 +81,7 @@ FAN_INFO_TIMESTAMP_FIELD = 'timestamp'
+ NOT_AVAILABLE = 'N/A'
+ UPDATING_STATUS = 'Updating'
+ 
+-PSU_INFO_UPDATE_PERIOD_SECS = 3
++PSU_INFO_UPDATE_PERIOD_SECS = 10
+ 
+ PSUUTIL_LOAD_ERROR = 1
+ 
+@@ -117,6 +120,101 @@ def _wrapper_get_psu_status(psu_index):
+     return platform_psuutil.get_psu_status(psu_index)
+ 
+ 
++def _wrapper_get_psu_current_out(psu_index):
++    if platform_chassis is not None:
++        try:
++            return platform_chassis.get_psu(psu_index - 1).get_current_out()
++        except NotImplementedError:
++            pass
++    return platform_psuutil.get_psu_iout(psu_index)
++
++def _wrapper_get_psu_voltage_out(psu_index):
++    if platform_chassis is not None:
++        try:
++            return platform_chassis.get_psu(psu_index - 1).get_voltage_out()
++        except NotImplementedError:
++            pass
++    return platform_psuutil.get_psu_vout(psu_index)
++
++def _wrapper_get_psu_power_out(psu_index):
++    if platform_chassis is not None:
++        try:
++            return platform_chassis.get_psu(psu_index - 1).get_power_out()
++        except NotImplementedError:
++            pass
++    return platform_psuutil.get_psu_pout(psu_index)
++
++def _wrapper_get_psu_current_in(psu_index):
++    if platform_chassis is not None:
++        try:
++            return platform_chassis.get_psu(psu_index - 1).get_current_in()
++        except NotImplementedError:
++            pass
++    return platform_psuutil.get_psu_iin(psu_index)
++
++def _wrapper_get_psu_voltage_in(psu_index):
++    if platform_chassis is not None:
++        try:
++            return platform_chassis.get_psu(psu_index - 1).get_voltage_in()
++        except NotImplementedError:
++            pass
++    return platform_psuutil.get_psu_vin(psu_index)
++
++def _wrapper_get_psu_power_in(psu_index):
++    if platform_chassis is not None:
++        try:
++            return platform_chassis.get_psu(psu_index - 1).get_power_in()
++        except NotImplementedError:
++            pass
++    return platform_psuutil.get_psu_pin(psu_index)
++
++def _wrapper_get_psu_temperature(psu_index):
++    if platform_chassis is not None:
++        try:
++            return platform_chassis.get_psu(psu_index - 1).get_temperature()
++        except NotImplementedError:
++            pass
++    return platform_psuutil.get_psu_temp(psu_index)
++
++def _wrapper_get_psu_direction(psu_index):
++    if platform_chassis is not None:
++        try:
++            psu_fan = platform_chassis.get_psu(psu_index - 1).get_fan()
++            if psu_fan is not None:
++                return psu_fan.get_direction()
++            return 'exhaust'
++        except NotImplementedError:
++            pass
++    try:
++        return platform_psuutil.get_psu_direction(psu_index)
++    except AttributeError:
++        return 'exhaust'
++
++def _wrapper_get_psu_warning(psu_index):
++    if platform_chassis is not None:
++        try:
++            return platform_chassis.get_psu(psu_index - 1).get_warning()
++        except NotImplementedError:
++            pass
++    try:
++        return platform_psuutil.get_psu_warning(psu_index)
++    except AttributeError:
++        pass
++
++def _wrapper_get_psu_direction_warning(psu_index):
++    if platform_chassis is not None:
++        try:
++            psu_fan = platform_chassis.get_psu(psu_index - 1).get_fan()
++            if psu_fan is not None:
++                return psu_fan.get_warning()
++            return False
++        except NotImplementedError:
++            pass
++    try:
++        return platform_psuutil.get_psu_dierction_warning(psu_index)
++    except AttributeError:
++        pass
++
+ #
+ # Helper functions =============================================================
+ #
+@@ -446,15 +544,45 @@ class DaemonPsud(daemon_base.DaemonBase):
+         return True
+ 
+     def update_psu_data(self):
+-        if not platform_chassis:
++        if not platform_chassis and not platform_psuutil:
+             return
+ 
+-        self.psu_threshold_exceeded_logged = False
+-        for index, psu in enumerate(platform_chassis.get_all_psus()):
+-            try:
+-                self._update_single_psu_data(index + 1, psu)
+-            except Exception as e:
+-                self.log_warning("Failed to update PSU data - {}".format(e))
++        if platform_chassis:
++            self.psu_threshold_exceeded_logged = False
++            for index, psu in enumerate(platform_chassis.get_all_psus()):
++                try:
++                    self._update_single_psu_data(index + 1, psu)
++                except Exception as e:
++                    self.log_warning("Failed to update PSU data - {}".format(e))
++        elif platform_psuutil:
++            self._update_psu_data_psuutil()
++
++
++    def _update_psu_data_psuutil(self):
++        for psu_index in range(1, platform_psuutil.get_num_psus()+1):
++            name = get_psu_key(psu_index)
++            fvs = swsscommon.FieldValuePairs(
++                [(PSU_INFO_MODEL_FIELD, NOT_AVAILABLE),
++                (PSU_INFO_SERIAL_FIELD, NOT_AVAILABLE),
++                (PSU_INFO_REV_FIELD, NOT_AVAILABLE),
++                (PSU_INFO_TEMP_FIELD, NOT_AVAILABLE),
++                (PSU_INFO_TEMP_TH_FIELD, NOT_AVAILABLE),
++                (PSU_INFO_VOLTAGE_FIELD, str(_wrapper_get_psu_voltage_out(psu_index))),
++                (PSU_INFO_VOLTAGE_MIN_TH_FIELD, NOT_AVAILABLE),
++                (PSU_INFO_VOLTAGE_MAX_TH_FIELD, NOT_AVAILABLE),
++                (PSU_INFO_CURRENT_FIELD, str(_wrapper_get_psu_current_out(psu_index))),
++                (PSU_INFO_POWER_FIELD, str(_wrapper_get_psu_power_out(psu_index))),
++                (PSU_INFO_POWER_WARNING_SUPPRESS_THRESHOLD, NOT_AVAILABLE),
++                (PSU_INFO_POWER_CRITICAL_THRESHOLD, NOT_AVAILABLE),
++                (PSU_INFO_POWER_OVERLOAD, NOT_AVAILABLE),
++                (PSU_INFO_FRU_FIELD, NOT_AVAILABLE),
++                (PSU_INFO_IN_CURRENT_FIELD, str(_wrapper_get_psu_current_in(psu_index))),
++                (PSU_INFO_IN_VOLTAGE_FIELD, str(_wrapper_get_psu_voltage_in(psu_index))),
++                (PSU_INFO_POWER_MAX_FIELD, str(_wrapper_get_psu_power_in(psu_index))),
++                (PSU_INFO_PRESENCE_FIELD, 'true' if _wrapper_get_psu_presence(psu_index) else 'false'),
++                (PSU_INFO_STATUS_FIELD, 'true' if _wrapper_get_psu_status(psu_index) else 'false'),
++                ])
++            self.psu_tbl.set(name, fvs)
+ 
+     def _update_single_psu_data(self, index, psu):
+         name = get_psu_key(index)
+@@ -650,15 +778,29 @@ class DaemonPsud(daemon_base.DaemonBase):
+             self.log_warning("set_status_led() not implemented")
+ 
+     def _update_led_color(self):
+-        if not platform_chassis:
++        if not platform_chassis and not platform_psuutil:
+             return
+ 
+-        for index, psu_status in self.psu_status_dict.items():
+-            fvs = swsscommon.FieldValuePairs([
+-                ('led_status', str(try_get(psu_status.psu.get_status_led, NOT_AVAILABLE)))
+-            ])
+-            self.psu_tbl.set(get_psu_key(index), fvs)
+-            self._update_psu_fan_led_status(psu_status.psu, index)
++        if platform_chassis:
++            for index, psu_status in self.psu_status_dict.items():
++                fvs = swsscommon.FieldValuePairs([
++                    ('led_status', str(try_get(psu_status.psu.get_status_led, NOT_AVAILABLE)))
++                ])
++                self.psu_tbl.set(get_psu_key(index), fvs)
++                self._update_psu_fan_led_status(psu_status.psu, index)
++        elif platform_psuutil:
++            for psu_index in range(1, platform_psuutil.get_num_psus()+1):
++                if _wrapper_get_psu_presence(psu_index) == 0:
++                    led_status = 'off'
++                elif _wrapper_get_psu_status(psu_index) == 0:
++                    led_status = 'red'
++                else:
++                    led_status = 'green'
++
++                fvs = swsscommon.FieldValuePairs([
++                    ('led_status', led_status)
++                ])
++                self.psu_tbl.set(get_psu_key(psu_index), fvs)
+ 
+     def _update_psu_fan_led_status(self, psu, psu_index):
+         psu_name = get_psu_key(psu_index)
+diff --git a/sonic-syseepromd/scripts/syseepromd b/sonic-syseepromd/scripts/syseepromd
+index 3ccf9a0..1e151ae 100644
+--- a/sonic-syseepromd/scripts/syseepromd
++++ b/sonic-syseepromd/scripts/syseepromd
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python2
++#!/usr/bin/env python3
+ 
+ '''
+     syseepromd
+diff --git a/sonic-thermalctld/scripts/thermalctld b/sonic-thermalctld/scripts/thermalctld
+index 82d64a1..5e8a406 100644
+--- a/sonic-thermalctld/scripts/thermalctld
++++ b/sonic-thermalctld/scripts/thermalctld
+@@ -11,12 +11,14 @@ import threading
+ import time
+ from datetime import datetime
+ 
+-import sonic_platform
+ from sonic_py_common import daemon_base, logger
+ from sonic_py_common.task_base import ProcessTaskBase
+ from swsscommon import swsscommon
+ 
+ 
++PLATFORM_SPECIFIC_MODULE_NAME = 'thermalutil'
++PLATFORM_SPECIFIC_CLASS_NAME = 'ThermalUtil'
++
+ # TODO: Once we no longer support Python 2, we can eliminate this and get the
+ # name using the 'name' field (e.g., `signal.SIGINT.name`) starting with Python 3.5
+ SIGNALS_TO_NAMES_DICT = dict((getattr(signal, n), n)
+@@ -794,25 +796,60 @@ class ThermalControlDaemon(daemon_base.DaemonBase):
+         self.stop_event = threading.Event()
+ 
+         self.wait_time = self.INTERVAL
++        self.thermal_manager = None
++        self.thermalUtil = None
+ 
+-        self.chassis = sonic_platform.platform.Platform().get_chassis()
+-
+-        self.thermal_monitor = ThermalMonitor(self.chassis)
+-        self.thermal_monitor.task_run()
++        state_db = daemon_base.db_connect("STATE_DB")
++        self.table = swsscommon.Table(state_db, TemperatureUpdater.TEMPER_INFO_TABLE_NAME)
+ 
+-        self.thermal_manager = None
+         try:
+-            self.thermal_manager = self.chassis.get_thermal_manager()
+-            if self.thermal_manager:
+-                self.thermal_manager.initialize()
+-                self.thermal_manager.load(ThermalControlDaemon.POLICY_FILE)
+-                self.thermal_manager.init_thermal_algorithm(self.chassis)
+-                # Use thermal manager interval if it's available
+-                self.wait_time = self.thermal_manager.get_interval()
+-        except NotImplementedError:
+-            self.log_warning('Thermal manager is not supported on this platform')
++            import sonic_platform
++            self.chassis = sonic_platform.platform.Platform().get_chassis()
++
++            self.thermal_monitor = ThermalMonitor(self.chassis)
++            self.thermal_monitor.task_run()
++            try:
++                self.thermal_manager = self.chassis.get_thermal_manager()
++                if self.thermal_manager:
++                    self.thermal_manager.initialize()
++                    self.thermal_manager.load(ThermalControlDaemon.POLICY_FILE)
++                    self.thermal_manager.init_thermal_algorithm(self.chassis)
++                    # Use thermal manager interval if it's available
++                    self.wait_time = self.thermal_manager.get_interval()
++            except NotImplementedError:
++                self.log_warning('Thermal manager is not supported on this platform')
++            except Exception as e:
++                self.log_error('Caught exception while initializing thermal manager - {}'.format(repr(e)))
++
+         except Exception as e:
+-            self.log_error('Caught exception while initializing thermal manager - {}'.format(repr(e)))
++            self.log_warning(
++                "Failed to load platform-specific chassis from sonic_platform package due to {}. Trying deprecated plugin method ...".format(repr(e)))
++
++            # If we didn't successfully load the class from the sonic_platform package, try loading the old plugin
++            try:
++                self.thermalUtil = self.load_platform_util(PLATFORM_SPECIFIC_MODULE_NAME, PLATFORM_SPECIFIC_CLASS_NAME)
++            except Exception as e:
++                self.log_error("Failed to load platform-specific chassis from deprecated plugin: {}".format(repr(e)))
++
++
++    def _refresh_temperature_status_thermalUtil(self):
++        for thermal_index in range(0, self.thermalUtil.get_num_thermal()):
++            name = self.thermalUtil.index_to_temp_mapping[thermal_index][0]
++            thermal_info_dict = self.thermalUtil.get_thermal_info_dict(thermal_index)
++            fvs = swsscommon.FieldValuePairs(
++                [('temperature', str(thermal_info_dict['temperature'])),
++                ('minimum_temperature', NOT_AVAILABLE),
++                ('maximum_temperature', NOT_AVAILABLE),
++                ('high_threshold', str(thermal_info_dict['high_threshold'])),
++                ('low_threshold', str(thermal_info_dict['low_threshold'])),
++                ('warning_status', str(thermal_info_dict['warning_status'])),
++                ('critical_high_threshold', str(thermal_info_dict['critical_high_threshold'])),
++                ('critical_low_threshold', str(thermal_info_dict['critical_low_threshold'])),
++                ('is_replaceable', 'False'),
++                ('timestamp', datetime.now().strftime('%Y%m%d %H:%M:%S'))
++                ])
++            self.table.set(name, fvs)
++
+ 
+     def deinit(self):
+         """
+@@ -865,6 +902,8 @@ class ThermalControlDaemon(daemon_base.DaemonBase):
+         try:
+             if self.thermal_manager:
+                 self.thermal_manager.run_policy(self.chassis)
++            elif self.thermalUtil:
++                self._refresh_temperature_status_thermalUtil()
+         except Exception as e:
+             self.log_error('Caught exception while running thermal policy - {}'.format(repr(e)))
+ 
+diff --git a/sonic-xcvrd/xcvrd/xcvrd.py b/sonic-xcvrd/xcvrd/xcvrd.py
+index b89f7d2..236ce3c 100644
+--- a/sonic-xcvrd/xcvrd/xcvrd.py
++++ b/sonic-xcvrd/xcvrd/xcvrd.py
+@@ -2424,6 +2424,7 @@ class DaemonXcvrd(daemon_base.DaemonBase):
+         # Load platform specific sfputil class
+         if platform_chassis is None or platform_sfputil is None:
+             try:
++                self.skip_cmis_mgr = True
+                 platform_sfputil = self.load_platform_util(PLATFORM_SPECIFIC_MODULE_NAME, PLATFORM_SPECIFIC_CLASS_NAME)
+             except Exception as e:
+                 self.log_error("Failed to load sfputil: {}".format(str(e)), True)
+-- 
+2.25.1
+

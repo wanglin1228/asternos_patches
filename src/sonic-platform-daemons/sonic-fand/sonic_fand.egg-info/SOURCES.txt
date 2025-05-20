@@ -1,0 +1,6 @@
+setup.py
+scripts/fand
+sonic_fand.egg-info/PKG-INFO
+sonic_fand.egg-info/SOURCES.txt
+sonic_fand.egg-info/dependency_links.txt
+sonic_fand.egg-info/top_level.txt

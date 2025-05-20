@@ -1,0 +1,152 @@
+#!/usr/bin/make -f
+
+export INSTALL_MOD_DIR:=extra
+
+PYTHON         ?= python3
+SHELL = /bin/bash
+PACKAGE_PRE_NAME := sonic-platform-asterfusion
+ifneq ($(CROSS_BUILD_ENVIRON), y)
+KVERSION   ?= $(shell uname -r)
+endif
+KERNEL_SRC :=  /lib/modules/$(KVERSION)
+MOD_SRC_DIR:= $(shell pwd)
+ARM_MODULE_DIRS:= x204y-48t-m x204y-48s-m x206y-48t-n x206y-48gt x204y-48gt x204y-24gt x206p-48s x206p-48s-ptp x206p-24s x202p-16s x202p-24s x202p-24y x104s-24gt x104s-48gt x104s-56gt x104s-64gt x102s-8gt x102s-8gtm x102s-16gt
+MODULE_DIR := modules
+UTILS_DIR := utils
+SERVICE_DIR := service
+SCRIPTS_DIR := scripts
+CONF_DIR := conf
+PROCESS_DIR := asterProcess
+MODULE_ALLDIRS := $(shell find . -mindepth 3 -maxdepth 3 -type d | grep modules | grep -v '\.tmp*')
+
+%:
+	dh $@ --with systemd,python2,python3 --buildsystem=pybuild
+
+clean:
+	if [ $(CONFIGURED_ARCH) == "arm64" ]; then \
+		for mod in $(ARM_MODULE_DIRS); do \
+			make modules -C $(KERNEL_SRC)/build M=$(MOD_SRC_DIR)/$${mod}/modules clean; \
+		done \
+	fi; \
+	make modules -C $(KERNEL_SRC)/build M=$(MOD_SRC_DIR)/common/modules/cpss clean;
+	dh_testdir
+	dh_testroot
+	dh_clean
+
+build:
+	if [ $(CONFIGURED_ARCH) == "arm64" ]; then \
+		for mod in $(ARM_MODULE_DIRS); do \
+			make modules -C $(KERNEL_SRC)/build M=$(MOD_SRC_DIR)/$${mod}/modules; \
+			cd $(MOD_SRC_DIR)/$${mod}; \
+			python3 setup.py build; \
+			python3 setup.py bdist_wheel -d $(MOD_SRC_DIR)/$${mod}/utils; \
+			cd $(MOD_SRC_DIR); \
+		done \
+	fi; \
+	
+	make modules -C $(KERNEL_SRC)/build M=$(MOD_SRC_DIR)/common/modules;
+
+binary: binary-arch binary-indep
+	# Nothing to do
+
+binary-arch:
+	# Nothing to do
+
+
+binary-indep:
+	# Custom package commands
+	if [ $(CONFIGURED_ARCH) == "arm64" ]; then \
+		for mod in $(ARM_MODULE_DIRS); do \
+			dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /$(KERNEL_SRC)/$(INSTALL_MOD_DIR); \
+			dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /usr/local/bin; \
+			dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /usr/local/bin/${PROCESS_DIR}; \
+			dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /usr/bin; \
+			dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /lib/systemd/system; \
+			cp $(MOD_SRC_DIR)/$${mod}/$(MODULE_DIR)/*.ko debian/$(PACKAGE_PRE_NAME)-$${mod}/$(KERNEL_SRC)/$(INSTALL_MOD_DIR); \
+			cp $(MOD_SRC_DIR)/common/$(MODULE_DIR)/cpss/*.ko debian/$(PACKAGE_PRE_NAME)-$${mod}/$(KERNEL_SRC)/$(INSTALL_MOD_DIR); \
+			cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/* debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/local/bin/; \
+			cp $(MOD_SRC_DIR)/$${mod}/$(SERVICE_DIR)/*.service debian/$(PACKAGE_PRE_NAME)-$${mod}/lib/systemd/system/; \
+			cp $(MOD_SRC_DIR)/$${mod}/$(SERVICE_DIR)/platform_api_mgnt.sh debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/local/bin/; \
+			cp $(MOD_SRC_DIR)/$${mod}/$(SCRIPTS_DIR)/* debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/local/bin/; \
+			cp $(MOD_SRC_DIR)/$${mod}/${PROCESS_DIR}/* debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/local/bin/${PROCESS_DIR}; \
+			if [ -f "$(MOD_SRC_DIR)/$${mod}/idtcm.bin" ]; then \
+				dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /lib/firmware; \
+				cp $(MOD_SRC_DIR)/$${mod}/idtcm.bin debian/$(PACKAGE_PRE_NAME)-$${mod}/lib/firmware/; \
+			fi; \
+			if [ $${mod} = "x204y-24gt" ]; then \
+				dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /usr/share/sonic/device/arm64-asterfusion_cx204y_24gt_c-r0; \
+				cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/*.whl debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/share/sonic/device/arm64-asterfusion_cx204y_24gt_c-r0; \
+			elif [ $${mod} = "x204y-48gt" ]; then \
+				dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /usr/share/sonic/device/arm64-asterfusion_cx204y_48gt_d-r0; \
+				cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/*.whl debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/share/sonic/device/arm64-asterfusion_cx204y_48gt_d-r0; \
+			elif [ $${mod} = "x204y-48s-m" ]; then \
+				dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /usr/share/sonic/device/arm64-asterfusion_cx204y_48s-r0; \
+				cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/*.whl debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/share/sonic/device/arm64-asterfusion_cx204y_48s-r0; \
+			elif [ $${mod} = "x204y-48t-m" ]; then \
+				dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /usr/share/sonic/device/arm64-asterfusion_cx204y_48gt_a-r0; \
+				cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/*.whl debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/share/sonic/device/arm64-asterfusion_cx204y_48gt_a-r0; \
+			elif [ $${mod} = "x206y-48gt" ]; then \
+				dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /usr/share/sonic/device/arm64-asterfusion_cx206y_48gt_b-r0; \
+				cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/*.whl debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/share/sonic/device/arm64-asterfusion_cx206y_48gt_b-r0; \
+			elif [ $${mod} = "x206y-48t-n" ]; then \
+				dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /usr/share/sonic/device/arm64-marvell_db98dx3530_52cd-r0; \
+				cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/*.whl debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/share/sonic/device/arm64-marvell_db98dx3530_52cd-r0; \
+			elif [ $${mod} = "x206p-48s" ]; then \
+				dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /usr/share/sonic/device/arm64-asterfusion_cx206p_48s-r0; \
+				cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/*.whl debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/share/sonic/device/arm64-asterfusion_cx206p_48s-r0; \
+			elif [ $${mod} = "x206p-48s-ptp" ]; then \
+				dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /usr/share/sonic/device/arm64-asterfusion_cx206p_48s_ptp-r0; \
+				cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/*.whl debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/share/sonic/device/arm64-asterfusion_cx206p_48s_ptp-r0; \
+			elif [ $${mod} = "x206p-24s" ]; then \
+				dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /usr/share/sonic/device/arm64-asterfusion_cx206p_24s-r0; \
+				cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/*.whl debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/share/sonic/device/arm64-asterfusion_cx206p_24s-r0; \
+			elif [ $${mod} = "x202p-16s" ]; then \
+				dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /usr/share/sonic/device/arm64-asterfusion_cx202p_16s-r0; \
+				cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/*.whl debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/share/sonic/device/arm64-asterfusion_cx202p_16s-r0; \
+			elif [ $${mod} = "x202p-24s" ]; then \
+				dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /usr/share/sonic/device/arm64-asterfusion_cx202p_24s-r0; \
+				cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/*.whl debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/share/sonic/device/arm64-asterfusion_cx202p_24s-r0; \
+			elif [ $${mod} = "x202p-24y" ]; then \
+				dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /usr/share/sonic/device/arm64-asterfusion_cx202p_24y-r0; \
+				cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/*.whl debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/share/sonic/device/arm64-asterfusion_cx202p_24y-r0; \
+			elif [ $${mod} = "x104s-24gt" ]; then \
+				dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /usr/share/sonic/device/arm64-asterfusion_cx104s_24gt_b-r0; \
+				cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/*.whl debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/share/sonic/device/arm64-asterfusion_cx104s_24gt_b-r0; \
+			elif [ $${mod} = "x104s-48gt" ]; then \
+				dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /usr/share/sonic/device/arm64-asterfusion_cx104s_48gt_b-r0; \
+				cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/*.whl debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/share/sonic/device/arm64-asterfusion_cx104s_48gt_b-r0; \
+			elif [ $${mod} = "x104s-56gt" ]; then \
+				dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /usr/share/sonic/device/arm64-asterfusion_cx104s_56gt_b-r0; \
+				cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/*.whl debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/share/sonic/device/arm64-asterfusion_cx104s_56gt_b-r0; \
+			elif [ $${mod} = "x104s-64gt" ]; then \
+				dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /usr/share/sonic/device/arm64-asterfusion_cx104s_64gt_b-r0; \
+				cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/*.whl debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/share/sonic/device/arm64-asterfusion_cx104s_64gt_b-r0; \
+			elif [ $${mod} = "x102s-8gt" ]; then \
+				dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /usr/share/sonic/device/arm64-asterfusion_cx102s_8gt_a2-r0; \
+				cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/*.whl debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/share/sonic/device/arm64-asterfusion_cx102s_8gt_a2-r0; \
+			elif [ $${mod} = "x102s-8gtm" ]; then \
+				dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /usr/share/sonic/device/arm64-asterfusion_cx102s_8gt_b1-r0; \
+				cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/*.whl debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/share/sonic/device/arm64-asterfusion_cx102s_8gt_b1-r0; \
+			elif [ $${mod} = "x102s-16gt" ]; then \
+				dh_installdirs -p$(PACKAGE_PRE_NAME)-$${mod} /usr/share/sonic/device/arm64-asterfusion_cx102s_16gt_a1-r0; \
+				cp $(MOD_SRC_DIR)/$${mod}/$(UTILS_DIR)/*.whl debian/$(PACKAGE_PRE_NAME)-$${mod}/usr/share/sonic/device/arm64-asterfusion_cx102s_16gt_a1-r0; \
+			fi; \
+		done \
+	fi; \
+
+	dh_testroot
+	dh_install
+	dh_installchangelogs
+	dh_installdocs
+	dh_systemd_enable
+	dh_installinit
+	dh_systemd_start
+	dh_link
+	dh_fixperms
+	dh_compress
+	dh_strip
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+.PHONY: build binary binary-arch binary-indep clean

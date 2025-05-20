@@ -1,0 +1,540 @@
+From 257d4c30fce1e8ff44abbd906dd3887143fda8b2 Mon Sep 17 00:00:00 2001
+From: chenxu <chenxu@asterfusion.com>
+Date: Mon, 19 May 2025 01:50:48 -0700
+Subject: [PATCH] support asterfusion devices
+
+Signed-off-by: chenxu <chenxu@asterfusion.com>
+---
+ build_debian.sh                               |  1 +
+ .../docker-pmon.supervisord.conf.j2           | 13 +++
+ .../docker-platform-monitor/docker_init.j2    |  2 +-
+ files/build_templates/docker_image_ctl.j2     |  1 +
+ .../build_templates/sonic_debian_extension.j2 |  8 +-
+ files/image_config/platform/rc.local          |  5 +
+ platform/marvell-arm64/one-image.mk           | 20 ++++
+ platform/marvell-arm64/platform.conf          | 69 +++++++------
+ platform/marvell-arm64/rules.mk               |  1 +
+ platform/marvell-arm64/sai/Makefile           |  2 +-
+ platform/marvell-arm64/sonic_fit.its          | 99 +++++++------------
+ platform/marvell/one-image.mk                 |  1 +
+ platform/marvell/rules.mk                     |  1 +
+ platform/marvell/sai/Makefile                 |  2 +-
+ rules/docker-platform-monitor.mk              |  1 +
+ 15 files changed, 131 insertions(+), 95 deletions(-)
+
+diff --git a/build_debian.sh b/build_debian.sh
+index 5ea15d18f..f1291c5a7 100755
+--- a/build_debian.sh
++++ b/build_debian.sh
+@@ -789,6 +789,7 @@ if [[ $TARGET_BOOTLOADER == uboot ]]; then
+         ## Overwriting the initrd image with uInitrd
+         sudo LANG=C chroot $FILESYSTEM_ROOT mv /boot/u${INITRD_FILE} /boot/$INITRD_FILE
+     elif [[ $CONFIGURED_ARCH == arm64 ]]; then
++	sudo cp -v $PLATFORM_DIR/${sonic_asic_platform}-${CONFIGURED_ARCH}/*.dtb $FILESYSTEM_ROOT/boot/
+         sudo cp -v $PLATFORM_DIR/${sonic_asic_platform}-${CONFIGURED_ARCH}/sonic_fit.its $FILESYSTEM_ROOT/boot/
+         sudo LANG=C chroot $FILESYSTEM_ROOT mkimage -f /boot/sonic_fit.its /boot/sonic_${CONFIGURED_ARCH}.fit
+     fi
+diff --git a/dockers/docker-platform-monitor/docker-pmon.supervisord.conf.j2 b/dockers/docker-platform-monitor/docker-pmon.supervisord.conf.j2
+index 899160dd3..df874b5fe 100644
+--- a/dockers/docker-platform-monitor/docker-pmon.supervisord.conf.j2
++++ b/dockers/docker-platform-monitor/docker-pmon.supervisord.conf.j2
+@@ -183,3 +183,16 @@ startsecs=10
+ dependent_startup=true
+ dependent_startup_wait_for=rsyslogd:running
+ {% endif %}
++
++{% if not skip_fand %}
++[program:fand]
++command=/usr/local/bin/fand
++priority=12
++autostart=false
++autorestart=unexpected
++stdout_logfile=syslog
++stderr_logfile=syslog
++startsecs=10
++dependent_startup=true
++dependent_startup_wait_for=rsyslogd:running
++{% endif %}
+diff --git a/dockers/docker-platform-monitor/docker_init.j2 b/dockers/docker-platform-monitor/docker_init.j2
+index 0b344328c..f692c60b5 100755
+--- a/dockers/docker-platform-monitor/docker_init.j2
++++ b/dockers/docker-platform-monitor/docker_init.j2
+@@ -14,7 +14,7 @@ HAVE_SENSORS_CONF=0
+ HAVE_FANCONTROL_CONF=0
+ IS_MODULAR_CHASSIS=0
+ # Default use python2 version
+-SONIC_PLATFORM_API_PYTHON_VERSION=2
++SONIC_PLATFORM_API_PYTHON_VERSION=3
+ 
+ if [ -e /usr/share/sonic/hwsku/pmon_daemon_control.json ];
+ then
+diff --git a/files/build_templates/docker_image_ctl.j2 b/files/build_templates/docker_image_ctl.j2
+index ec11900f1..ebd947733 100644
+--- a/files/build_templates/docker_image_ctl.j2
++++ b/files/build_templates/docker_image_ctl.j2
+@@ -623,6 +623,7 @@ start() {
+ {%- endif %}
+ {%- if docker_container_name == "pmon" %}
+     -v /usr/share/sonic/firmware:/usr/share/sonic/firmware:rw \
++    -v /var/cache/sonic:/var/cache/sonic:rw \
+ {%- endif %}
+ {%- if docker_container_name == "swss" %}
+         -e ASIC_VENDOR={{ sonic_asic_platform }} \
+diff --git a/files/build_templates/sonic_debian_extension.j2 b/files/build_templates/sonic_debian_extension.j2
+index 2c76c13f9..d7cc07e27 100644
+--- a/files/build_templates/sonic_debian_extension.j2
++++ b/files/build_templates/sonic_debian_extension.j2
+@@ -244,8 +244,10 @@ sudo https_proxy=$https_proxy LANG=C chroot $FILESYSTEM_ROOT pip3 install system
+ # Install SONiC host services package
+ SONIC_HOST_SERVICES_PY3_WHEEL_NAME=$(basename {{sonic_host_services_py3_wheel_path}})
+ sudo cp {{sonic_host_services_py3_wheel_path}} $FILESYSTEM_ROOT/$SONIC_HOST_SERVICES_PY3_WHEEL_NAME
++sudo https_proxy=$https_proxy LANG=C chroot $FILESYSTEM_ROOT pip3 install ninja
++sudo https_proxy=$https_proxy LANG=C chroot $FILESYSTEM_ROOT pip3 install meson-python
+ sudo https_proxy=$https_proxy LANG=C chroot $FILESYSTEM_ROOT pip3 install pycairo==1.26.0
+-sudo https_proxy=$https_proxy LANG=C chroot $FILESYSTEM_ROOT pip3 install --no-build-isolation pygobject
++sudo https_proxy=$https_proxy LANG=C chroot $FILESYSTEM_ROOT pip3 install --no-build-isolation pygobject==3.50.0
+ sudo https_proxy=$https_proxy LANG=C chroot $FILESYSTEM_ROOT pip3 install $SONIC_HOST_SERVICES_PY3_WHEEL_NAME
+ sudo rm -rf $FILESYSTEM_ROOT/$SONIC_HOST_SERVICES_PY3_WHEEL_NAME
+ 
+@@ -727,6 +729,10 @@ sudo LANG=C chroot $FILESYSTEM_ROOT systemctl enable fstrim.timer
+ 
+ ## copy platform rc.local
+ sudo cp $IMAGE_CONFIGS/platform/rc.local $FILESYSTEM_ROOT/etc/
++sudo cp $IMAGE_CONFIGS/platform/sku_setup $FILESYSTEM_ROOT/etc/
++
++## copy platform poe_auto_init.sh
++sudo cp $IMAGE_CONFIGS/platform/poe_auto_init.sh $FILESYSTEM_ROOT/etc/
+ 
+ ## copy blacklist file
+ sudo cp $IMAGE_CONFIGS/platform/linux_kernel_bde.conf $FILESYSTEM_ROOT/etc/modprobe.d/
+diff --git a/files/image_config/platform/rc.local b/files/image_config/platform/rc.local
+index 1848c56f3..75985e215 100755
+--- a/files/image_config/platform/rc.local
++++ b/files/image_config/platform/rc.local
+@@ -308,6 +308,8 @@ if [ -f $FIRST_BOOT_FILE ]; then
+ 
+     sync
+ 
++    /bin/bash /etc/sku_setup ${platform}
++
+     # If the unit booted into SONiC from another NOS's grub,
+     # we now install a grub for SONiC.
+     if [ -n "$onie_platform" ] && [ -n  "$grub_installation_needed" ]; then
+@@ -396,6 +398,9 @@ if [ -f $FIRST_BOOT_FILE ]; then
+     # Kdump tools configuration
+     [ -f /etc/default/kdump-tools ] && sed -i -e "s/__PLATFORM__/$platform/g" /etc/default/kdump-tools
+ 
++    chmod +x /etc/poe_auto_init.sh
++    /etc/poe_auto_init.sh ${platform} &
++
+     firsttime_exit
+ fi
+ 
+diff --git a/platform/marvell-arm64/one-image.mk b/platform/marvell-arm64/one-image.mk
+index 1aa36f2b1..b6402b7dc 100644
+--- a/platform/marvell-arm64/one-image.mk
++++ b/platform/marvell-arm64/one-image.mk
+@@ -8,6 +8,26 @@ $(SONIC_ONE_IMAGE)_INSTALLS += $(MRVL_PRESTERA_DEB)
+ $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(NOKIA_7215_PLATFORM) \
+ 				$(AC5X_RD98DX35xx_PLATFORM) \
+ 				$(AC5X_RD98DX35xxCN9131_PLATFORM)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(ASTERFUSION_X204Y-48T-M_PLATFORM_MODULE)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(ASTERFUSION_X204Y-48S-M_PLATFORM_MODULE)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(ASTERFUSION_X206Y-48T-N_PLATFORM_MODULE)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(ASTERFUSION_X206Y-48GT_PLATFORM_MODULE)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(ASTERFUSION_X204Y-48GT_PLATFORM_MODULE)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(ASTERFUSION_X204Y-24GT_PLATFORM_MODULE)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(ASTERFUSION_X206P-48S_PLATFORM_MODULE)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(ASTERFUSION_X206P-48S-PTP_PLATFORM_MODULE)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(ASTERFUSION_X206P-24S_PLATFORM_MODULE)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(ASTERFUSION_X202P-16S_PLATFORM_MODULE)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(ASTERFUSION_X202P-24S_PLATFORM_MODULE)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(ASTERFUSION_X202P-24Y_PLATFORM_MODULE)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(ASTERFUSION_X104S-24GT_PLATFORM_MODULE)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(ASTERFUSION_X104S-48GT_PLATFORM_MODULE)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(ASTERFUSION_X104S-56GT_PLATFORM_MODULE)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(ASTERFUSION_X104S-64GT_PLATFORM_MODULE)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(ASTERFUSION_X102S-8GT_PLATFORM_MODULE)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(ASTERFUSION_X102S-8GTM_PLATFORM_MODULE)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(ASTERFUSION_X102S-16GT_PLATFORM_MODULE)
++
+ ifeq ($(INSTALL_DEBUG_TOOLS),y)
+ $(SONIC_ONE_IMAGE)_DOCKERS += $(SONIC_INSTALL_DOCKER_DBG_IMAGES)
+ $(SONIC_ONE_IMAGE)_DOCKERS += $(filter-out $(patsubst %-$(DBG_IMAGE_MARK).gz,%.gz, $(SONIC_INSTALL_DOCKER_DBG_IMAGES)), $(SONIC_INSTALL_DOCKER_IMAGES))
+diff --git a/platform/marvell-arm64/platform.conf b/platform/marvell-arm64/platform.conf
+index 24902b795..763aaa282 100644
+--- a/platform/marvell-arm64/platform.conf
++++ b/platform/marvell-arm64/platform.conf
+@@ -24,22 +24,29 @@ else
+     MACH_FILE="/host/machine.conf"
+ fi
+ 
+-PLATFORM=`sed -n 's/^onie_platform=\(.*\)/\1/p' $MACH_FILE`
++PLATFORM=$(onie-syseeprom -g 0x28)
+ echo "Intalling SONiC from $install_env on Platform $PLATFORM"
+ 
+ PLATFORM_AC5X=0
+ PLATFORM_CN9131=0
+-
++ARM_SMMU_ATTR=''
+ case $PLATFORM in
+-    arm64-nokia_ixs7215_52xb-r0) PLATFORM_7215_A1=1;
+-		fdt_fname="/usr/lib/linux-image-${kernel_version}/marvell/7215-ixs-a1.dtb";
+-		fit_conf_name="#conf_7215_a1";;
+-    arm64-marvell_rd98DX35xx-r0) PLATFORM_AC5X=1;
+-		fdt_fname="/usr/lib/linux-image-$kernel_version/marvell/ac5-98dx35xx-rd.dtb";
+-		fit_conf_name="#conf_ac5x";;
+-    arm64-marvell_rd98DX35xx_cn9131-r0) PLATFORM_CN9131=1;
+-		fdt_fname="/boot/cn9131-db-comexpress.dtb";
+-		fit_conf_name="#conf_cn9131";;
++    arm64-asterfusion_cx206p_48s-r0 | arm64-asterfusion_cx206p_48s_ptp-r0 |\
++    arm64-asterfusion_cx202p_16s-r0 | arm64-asterfusion_cx202p_24s-r0 |\
++    arm64-asterfusion_cx202p_24y-r0 | arm64-asterfusion_cx206p_24s-r0) PLATFORM_CN9130=1;
++		fdt_fname="/boot/cn9130-20xp.dtb";
++                ARM_SMMU_ATTR="arm-smmu.disable_bypass=0"
++		fit_conf_name="#conf_cn9130";;
++    arm64-asterfusion_cx102s_16gt_a1-r0 | arm64-asterfusion_cx102s_8gt_a2-r0 |\
++    arm64-asterfusion_cx102s_8gt_b1-r0) PLATFORM_AC5Y=1;
++                fdt_fname="/boot/102s.dtb";
++                fit_conf_name="#conf_ac5y";;
++    arm64-asterfusion_cx104s_24gt_b-r0 | arm64-asterfusion_cx104s_48gt_b-r0 |\
++    arm64-asterfusion_cx104s_56gt_b-r0 | arm64-asterfusion_cx104s_64gt_b-r0 |\
++    arm64-asterfusion_cx204y_24gt_c-r0 | arm64-asterfusion_cx204y_48gt_a-r0 |\
++    arm64-asterfusion_cx204y_48gt_d-r0 | arm64-asterfusion_cx206y_48gt_b-r0) PLATFORM_AC5X=1;
++                fdt_fname="/boot/ac5x-204.dtb";
++                fit_conf_name="#conf_ac5x";;
+ esac
+ 
+ if [ $PLATFORM_AC5X -eq 1 ]; then
+@@ -47,21 +54,23 @@ if [ $PLATFORM_AC5X -eq 1 ]; then
+     fit_addr=0x210000000
+     initrd_addr=0x206000000
+ 
+-    FW_ENV_DEFAULT='/dev/mtd0 0x400000 0x10000 0x10000'
+-    demo_part=2
++    FW_ENV_DEFAULT='/dev/mtd0 0x3F0000 0x10000 0x10000'
++    demo_part=3
+     mmc_bus="mmc0:0001"
+-elif [ $PLATFORM_7215_A1 -eq 1 ]; then
+-    fit_addr=0x20000000
+-    VAR_LOG=4096
+-    FW_ENV_DEFAULT='/dev/mtd1 0x0 0x10000 0x10000'
+-    demo_part=2
++elif [ $PLATFORM_AC5Y -eq 1 ]; then
++    fdt_addr=0x201000000
++    fit_addr=0x210000000
++    initrd_addr=0x206000000
++
++    FW_ENV_DEFAULT='/dev/mtd0 0x3F0000 0x10000 0x10000'
++    demo_part=3
+     mmc_bus="mmc0:0001"
+-elif [ $PLATFORM_CN9131 -eq 1 ]; then
+-    fdt_addr=0x1000000
+-    fit_addr=0x8000000
+-    initrd_addr=0x2000000
+-    demo_part=2
+-    FW_ENV_DEFAULT='/dev/mtd1 0x1F0000 0x10000 0x10000'
++elif [ $PLATFORM_CN9130 -eq 1 ]; then
++    fdt_addr=0x6f00000
++    fit_addr=0x9000000
++    initrd_addr=0xa00000
++    demo_part=3
++    FW_ENV_DEFAULT='/dev/mtd0 0x3F0000 0x10000 0x10000'
+     mmc_bus="mmc0:0001"
+ else
+     fdt_addr=0x1000000
+@@ -178,6 +187,11 @@ prepare_boot_menu() {
+     fdt_name=${image_dir}${fdt_fname}
+     fit_name=${image_dir}${fit_fname}
+ 
++    if [ $PLATFORM_AC5Y -eq 1 ]; then
++        irq_num=$(cat /proc/interrupts | grep spi | grep -o -E '[0-9]+' | head -n 1)
++        echo 2 > /proc/irq/${irq_num}/smp_affinity
++    fi
++
+     if [ "$install_env" = "onie" ]; then
+         FW_ARG="-f"
+         fw_setenv ${FW_ARG} image_dir_old "" > /dev/null
+@@ -217,17 +231,15 @@ prepare_boot_menu() {
+     fw_setenv ${FW_ARG} sonic_version_1 $demo_volume_revision_label > /dev/null
+     BOOT1='echo " > Boot1: $sonic_version_1 - run sonic_image_1";echo;'
+     BOOT2='echo " > Boot2: $sonic_version_2 - run sonic_image_2";echo;'
+-    BOOT3='echo " > Boot3: ONIE - run onie_boot";echo;'
++    BOOT3='echo " > Boot3: ONIE - run bootefi";echo;'
+     BORDER='echo "---------------------------------------------------";echo;'
+     fw_setenv ${FW_ARG} print_menu "$BORDER $BOOT1 $BOOT2 $BOOT3 $BORDER" > /dev/null
+-
+-    fw_setenv ${FW_ARG} linuxargs "net.ifnames=0 loopfstype=squashfs loop=$image_dir/$FILESYSTEM_SQUASHFS systemd.unified_cgroup_hierarchy=0 varlog_size=$VAR_LOG ${ONIE_PLATFORM_EXTRA_CMDLINE_LINUX}" > /dev/null
++    fw_setenv ${FW_ARG} linuxargs "net.ifnames=0 loopfstype=squashfs loop=$image_dir/$FILESYSTEM_SQUASHFS systemd.unified_cgroup_hierarchy=0 varlog_size=$VAR_LOG $ARM_SMMU_ATTR default_hugepagesz=32M hugepagesz=32M hugepages=4" > /dev/null
+     sonic_bootargs_old='setenv bootargs root='$demo_dev' rw rootwait panic=1 console=ttyS0,${baudrate} ${othbootargs} ${mtdparts} ${linuxargs_old}'
+     fw_setenv ${FW_ARG} sonic_bootargs_old "$sonic_bootargs_old" > /dev/null || true
+     sonic_boot_load_old=$(fw_printenv -n sonic_boot_load || true)
+     old_str="_old"
+     fw_setenv ${FW_ARG} sonic_boot_load_old "$sonic_boot_load_old$old_str" > /dev/null || true
+-
+     fw_setenv ${FW_ARG} kernel_addr $kernel_addr > /dev/null
+     fw_setenv ${FW_ARG} fdt_addr $fdt_addr > /dev/null
+     fw_setenv ${FW_ARG} fit_addr $fit_addr > /dev/null
+@@ -243,7 +255,6 @@ prepare_boot_menu() {
+     fw_setenv ${FW_ARG} sonic_image_1 "$SONIC_BOOT_CMD" > /dev/null
+     fw_setenv ${FW_ARG} boot_next  'run sonic_image_1'> /dev/null
+     fw_setenv ${FW_ARG} bootcmd 'run print_menu; usb start; test -n "$boot_once" && setenv do_boot_once "$boot_once" && setenv boot_once "" && saveenv && run do_boot_once; run boot_next' > /dev/null
+-
+     echo "Installed SONiC base image SONiC-OS successfully"
+ }
+ 
+diff --git a/platform/marvell-arm64/rules.mk b/platform/marvell-arm64/rules.mk
+index 882a9451e..427a5d9ac 100644
+--- a/platform/marvell-arm64/rules.mk
++++ b/platform/marvell-arm64/rules.mk
+@@ -8,6 +8,7 @@ include $(PLATFORM_PATH)/one-image.mk
+ include $(PLATFORM_PATH)/mrvl-prestera.mk
+ include $(PLATFORM_PATH)/platform-nokia.mk
+ include $(PLATFORM_PATH)/platform-marvell.mk
++include $(PLATFORM_PATH)/platform-asterfusion.mk
+ 
+ SONIC_ALL += $(SONIC_ONE_IMAGE) \
+              $(DOCKER_FPM) 	\
+diff --git a/platform/marvell-arm64/sai/Makefile b/platform/marvell-arm64/sai/Makefile
+index a23b45843..f536d9dce 100644
+--- a/platform/marvell-arm64/sai/Makefile
++++ b/platform/marvell-arm64/sai/Makefile
+@@ -2,7 +2,7 @@
+ SHELL = /bin/bash
+ .SHELLFLAGS += -e
+ 
+-MRVL_SAI_URL = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/master/arm64/sai-plugin/202311/$(MRVL_SAI)
++MRVL_SAI_URL = https://github.com/asterfusion/asternos_binaries/tree/main/marvell/arm64/sai/$(MRVL_SAI)
+ 
+ $(addprefix $(DEST)/, $(MRVL_SAI)): $(DEST)/% :
+ 	# get deb package
+diff --git a/platform/marvell-arm64/sonic_fit.its b/platform/marvell-arm64/sonic_fit.its
+index 9b8a85443..fcde745d7 100644
+--- a/platform/marvell-arm64/sonic_fit.its
++++ b/platform/marvell-arm64/sonic_fit.its
+@@ -5,22 +5,22 @@
+     #address-cells = <1>;
+   
+     images {
+-        kernel_ac5x {
+-            description = "Linux Kernel for AC5x";
++        kernel_ac5 {
++            description = "Linux Kernel for AC5";
+             data = /incbin/("/boot/vmlinuz-5.10.0-30-2-arm64");
+             type = "kernel";
+             arch = "arm64";
+             os = "linux";
+             compression = "none";
+-            load = <0x2 0x2080000>;
+-            entry = <0x2 0x2080000>;
++            load = <0x2 0x2000000>;
++            entry = <0x2 0x2000000>;
+             hash@1 {
+                 algo = "sha1";
+             };
+         };
+         fdt_ac5x {
+             description = "Flattened Device Tree blob for AC5x";
+-            data = /incbin/("/usr/lib/linux-image-5.10.0-30-2-arm64/marvell/ac5-98dx35xx-rd.dtb");
++            data = /incbin/("/boot/ac5x-204.dtb");
+             type = "flat_dt";
+             arch = "arm64";
+             compression = "none";
+@@ -29,19 +29,19 @@
+                 algo = "sha1";
+             };
+         };
+-        fdt_7215_a1 {
+-            description = "Flattened Device Tree blob for 7215_IXS_A1";
+-            data = /incbin/("/usr/lib/linux-image-5.10.0-30-2-arm64/marvell/7215-ixs-a1.dtb");
++        fdt_ac5y {
++            description = "Flattened Device Tree blob for AC5y";
++            data = /incbin/("/boot/102s.dtb");
+             type = "flat_dt";
+             arch = "arm64";
+             compression = "none";
+-            load = <0x11000000>;
++            load = <0x2 0x1000000>;
+             hash@1 {
+                 algo = "sha1";
+             };
+         };
+-        ramdisk_ac5x {
+-            description = "ramdisk for AC5x";
++        ramdisk_ac5 {
++            description = "ramdisk for AC5";
+             data = /incbin/("/boot/initrd.img-5.10.0-30-2-arm64");
+             type = "ramdisk";
+             arch = "arm64";
+@@ -53,66 +53,40 @@
+                 algo = "sha1";
+             };
+         };
+-        kernel_1 {
+-            description = "Linux Kernel";
+-            data = /incbin/("/boot/vmlinuz-5.10.0-30-2-arm64");
+-            type = "kernel";
++        fdt_cn9130 {
++            description = "Flattened Device Tree blob";
++            data = /incbin/("/boot/cn9130-20xp.dtb");
++            type = "flat_dt";
+             arch = "arm64";
+-            os = "linux";
+             compression = "none";
+-            load = <0x2000000>;
+-            entry = <0x2000000>;
++            load = <0x6f00000>;
++            entry = <0x6f00000>;
+             hash@1 {
+                 algo = "sha1";
+             };
+         };
+-        kernel_2 {
++        kernel_cn9130 {
+             description = "Linux Kernel";
+             data = /incbin/("/boot/vmlinuz-5.10.0-30-2-arm64");
+             type = "kernel";
+             arch = "arm64";
+             os = "linux";
+             compression = "none";
+-            load = <0x12000000>;
+-            entry = <0x12000000>;
++            load = <0x7000000>;
++            entry = <0x7000000>;
+             hash@1 {
+                 algo = "sha1";
+             };
+         };
+-        ramdisk_1 {
++        ramdisk_cn9130 {
+             description = "ramdisk";
+             data = /incbin/("/boot/initrd.img-5.10.0-30-2-arm64");
+             type = "ramdisk";
+             arch = "arm64";
+             os = "linux";
+             compression = "gzip";
+-            load = <0x6000000>;
+-            entry = <0x6000000>;
+-            hash@1 {
+-                algo = "sha1";
+-            };
+-        };
+-        ramdisk_2 {
+-            description = "ramdisk";
+-            data = /incbin/("/boot/initrd.img-5.10.0-30-2-arm64");
+-            type = "ramdisk";
+-            arch = "arm64";
+-            os = "linux";
+-            compression = "gzip";
+-            load = <0x18000000>;
+-            entry = <0x18000000>;
+-            hash@1 {
+-                algo = "sha1";
+-            };
+-        };
+-        fdt_cn9131 {
+-            description = "Flattened Device Tree blob";
+-            data = /incbin/("/boot/cn9131-db-comexpress.dtb");
+-            type = "flat_dt";
+-            arch = "arm64";
+-            compression = "none";
+-            load = <0x1000000>;
+-            entry = <0x1000000>;
++            load = <0xa00000>;
++            entry = <0xa00000>;
+             hash@1 {
+                 algo = "sha1";
+             };
+@@ -121,28 +95,29 @@
+     configurations {
+         default = "conf_ac5x";
+         conf_ac5x {
+-            description = "Boot Linux kernel with FDT blob + ramdisk for RD_AC5x";
+-            kernel = "kernel_ac5x";
++            description = "Boot Linux kernel with FDT blob + ramdisk for AC5x";
++            kernel = "kernel_ac5";
+             fdt = "fdt_ac5x";
+-            ramdisk = "ramdisk_ac5x";
++            ramdisk = "ramdisk_ac5";
+             hash@1 {
+                 algo = "sha1";
+             };
+         };
+-        conf_7215_a1 {
+-            description = "Boot Linux kernel with FDT blob + ramdisk for 7125_IXS_A1";
+-            kernel = "kernel_2";
+-            fdt = "fdt_7215_a1";
+-            ramdisk = "ramdisk_2";
++        conf_ac5y {
++            description = "Boot Linux kernel with FDT blob + ramdisk for AC5y";
++            kernel = "kernel_ac5";
++            fdt = "fdt_ac5y";
++            ramdisk = "ramdisk_ac5";
+             hash@1 {
+                 algo = "sha1";
+             };
+         };
+-        conf_cn9131 {
+-            description = "Boot Linux kernel with FDT blob + ramdisk for CN9131";
+-            kernel = "kernel_1";
+-            fdt = "fdt_cn9131";
+-            ramdisk = "ramdisk_1";
++
++        conf_cn9130 {
++            description = "Boot Linux kernel with FDT blob + ramdisk for CN9130";
++            kernel = "kernel_cn9130";
++            fdt = "fdt_cn9130";
++            ramdisk = "ramdisk_cn9130";
+             hash@1 {
+                 algo = "sha1";
+             };
+diff --git a/platform/marvell/one-image.mk b/platform/marvell/one-image.mk
+index fcac03854..87c373c23 100644
+--- a/platform/marvell/one-image.mk
++++ b/platform/marvell/one-image.mk
+@@ -4,6 +4,7 @@ SONIC_ONE_IMAGE = sonic-marvell.bin
+ $(SONIC_ONE_IMAGE)_MACHINE = marvell
+ $(SONIC_ONE_IMAGE)_IMAGE_TYPE = onie
+ $(SONIC_ONE_IMAGE)_INSTALLS += $(SYSTEMD_SONIC_GENERATOR)
++$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(ASTERFUSION_CX308P-48Y-N_PLATFORM_MODULE) $(ASTERFUSION_CX532P-N_PLATFORM_MODULE)
+ ifeq ($(INSTALL_DEBUG_TOOLS),y)
+ $(SONIC_ONE_IMAGE)_DOCKERS += $(SONIC_INSTALL_DOCKER_DBG_IMAGES)
+ $(SONIC_ONE_IMAGE)_DOCKERS += $(filter-out $(patsubst %-$(DBG_IMAGE_MARK).gz,%.gz, $(SONIC_INSTALL_DOCKER_DBG_IMAGES)), $(SONIC_INSTALL_DOCKER_IMAGES))
+diff --git a/platform/marvell/rules.mk b/platform/marvell/rules.mk
+index da23e53f2..186eb9bf7 100644
+--- a/platform/marvell/rules.mk
++++ b/platform/marvell/rules.mk
+@@ -1,4 +1,5 @@
+ include $(PLATFORM_PATH)/sai.mk
++include $(PLATFORM_PATH)/platform-modules-asterfusion.mk
+ include $(PLATFORM_PATH)/docker-syncd-mrvl.mk
+ include $(PLATFORM_PATH)/docker-syncd-mrvl-rpc.mk
+ include $(PLATFORM_PATH)/libsaithrift-dev.mk
+diff --git a/platform/marvell/sai/Makefile b/platform/marvell/sai/Makefile
+index 3438dab61..8cef8098b 100644
+--- a/platform/marvell/sai/Makefile
++++ b/platform/marvell/sai/Makefile
+@@ -2,7 +2,7 @@
+ SHELL = /bin/bash
+ .SHELLFLAGS += -e
+ 
+-MRVL_SAI_URL = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/master/amd64/sai-plugin/202311/$(MRVL_SAI)
++MRVL_SAI_URL = https://github.com/asterfusion/asternos_binaries/tree/main/marvell/amd64/sai/$(MRVL_SAI)
+ 
+ $(addprefix $(DEST)/, $(MRVL_SAI)): $(DEST)/% :
+ 	# get deb package
+diff --git a/rules/docker-platform-monitor.mk b/rules/docker-platform-monitor.mk
+index 6652dfe18..6baa98bed 100644
+--- a/rules/docker-platform-monitor.mk
++++ b/rules/docker-platform-monitor.mk
+@@ -21,6 +21,7 @@ $(DOCKER_PLATFORM_MONITOR)_PYTHON_WHEELS += $(SONIC_THERMALCTLD_PY3)
+ $(DOCKER_PLATFORM_MONITOR)_PYTHON_WHEELS += $(SONIC_XCVRD_PY3)
+ $(DOCKER_PLATFORM_MONITOR)_PYTHON_WHEELS += $(SONIC_YCABLED_PY3)
+ $(DOCKER_PLATFORM_MONITOR)_PYTHON_WHEELS += $(SONIC_CHASSISD_PY3)
++$(DOCKER_PLATFORM_MONITOR)_PYTHON_WHEELS += $(SONIC_FAND_PY3)
+ 
+ ifeq ($(PDDF_SUPPORT),y)
+ $(DOCKER_PLATFORM_MONITOR)_PYTHON_WHEELS += $(PDDF_PLATFORM_API_BASE_PY3)
+-- 
+2.25.1
+

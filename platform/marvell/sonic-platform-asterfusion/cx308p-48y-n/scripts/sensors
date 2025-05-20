@@ -1,0 +1,25 @@
+#!/bin/bash
+if [ "$1" == "all" ]; then
+        docker exec -i pmon sensors
+
+#To probe sensors not part of lm-sensors
+        if [ -r /usr/local/bin/asterfusion_cx308p_sensors.py ]; then
+                python /usr/local/bin/asterfusion_cx308p_sensors.py sensor_status
+                python /usr/local/bin/asterfusion_cx308p_sensors.py fan_status
+                python /usr/local/bin/asterfusion_cx308p_sensors.py power_status
+        fi
+elif [ "$1" == "fans" ]; then
+        python /usr/local/bin/asterfusion_cx308p_sensors.py fan_status
+elif [ "$1" == "temps" ]; then
+        docker exec -i pmon sensors
+        python /usr/local/bin/asterfusion_cx308p_sensors.py sensor_status
+elif [ "$1" == "powers" ]; then
+        python /usr/local/bin/asterfusion_cx308p_sensors.py power_status
+else
+        echo "show environment [OPTIONS]"
+        echo "OPTIONS:"
+        echo "  all       Show system environment status"
+        echo "  fans      Show system fans status"
+        echo "  powers    Show system PSU powers"
+        echo "  temps     Show system temps"
+fi

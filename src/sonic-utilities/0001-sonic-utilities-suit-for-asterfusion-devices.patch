@@ -1,0 +1,139 @@
+From 5c47fac5904878a8f00c34c3e6b0114100b0ca43 Mon Sep 17 00:00:00 2001
+From: chenxu <chenxu@asterfusion.com>
+Date: Sun, 18 May 2025 20:38:02 -0700
+Subject: [PATCH] suit for asterfusion device
+
+Signed-off-by: chenxu <chenxu@asterfusion.com>
+---
+ scripts/decode-syseeprom | 39 ++++++++++++++++++++++++++++++++++-----
+ scripts/fanshow          |  6 ++----
+ tests/fan_test.py        | 10 +++++-----
+ 3 files changed, 41 insertions(+), 14 deletions(-)
+
+diff --git a/scripts/decode-syseeprom b/scripts/decode-syseeprom
+index 5812f381..1f46ab2e 100755
+--- a/scripts/decode-syseeprom
++++ b/scripts/decode-syseeprom
+@@ -15,15 +15,17 @@ import os
+ import re
+ import sys
+ 
+-import sonic_platform
+ from sonic_platform_base.sonic_eeprom.eeprom_tlvinfo import TlvInfoDecoder
+ from sonic_py_common import device_info, logger
++from sonic_py_common.general import load_module_from_source
+ from swsscommon.swsscommon import SonicV2Connector
+ from tabulate import tabulate
+ 
+ 
+ EEPROM_INFO_TABLE = 'EEPROM_INFO'
+ SYSLOG_IDENTIFIER = 'decode-syseeprom'
++PLATFORM_SPECIFIC_MODULE_NAME = 'eeprom'
++PLATFORM_SPECIFIC_CLASS_NAME = 'board'
+ 
+ log = logger.Logger(SYSLOG_IDENTIFIER)
+ 
+@@ -31,18 +33,45 @@ def instantiate_eeprom_object():
+     eeprom = None
+ 
+     try:
++        import sonic_platform
+         eeprom = sonic_platform.platform.Platform().get_chassis().get_eeprom()
+-    except Exception as e:
+-        log.log_error('Failed to obtain EEPROM object due to {}'.format(repr(e)))
+-        eeprom = None
++        return eeprom
++    except ModuleNotFoundError as e:
++        pass
+ 
+-    return eeprom
++    (platform_path, hwsku_path) = device_info.get_paths_to_platform_and_hwsku_dirs()
++    try:
++        module_file = "/".join([platform_path, "plugins", PLATFORM_SPECIFIC_MODULE_NAME + ".py"])
++        module = load_module_from_source(PLATFORM_SPECIFIC_MODULE_NAME, module_file)
++    except IOError as e:
++        raise IOError("Failed to load platform module '%s': %s" % (PLATFORM_SPECIFIC_MODULE_NAME, str(e)))
++
++    try:
++        platform_util_class = getattr(module, PLATFORM_SPECIFIC_CLASS_NAME)
++        # board class of eeprom requires 4 paramerters, need special treatment here.
++        return platform_util_class('','','','')
++    except AttributeError as e:
++        raise AttributeError("Failed to instantiate '%s' class: %s" % (PLATFORM_SPECIFIC_CLASS_NAME, str(e)))
+ 
+ 
+ def read_and_print_eeprom():
+     eeprom = instantiate_eeprom_object()
+     if not eeprom:
+         return False
++    # Asterfusion start
++    # Add for CX308P-48Y-N Marvell
++    if hasattr(eeprom, "init_eeprom"):
++        try:
++            eeprom.init_eeprom()
++        except Exception as e:
++            raise Exception("Failed to init eeprom cache file : {}".format(e))
++    # Add for Innovium and CX532P-N Marvell
++    if hasattr(eeprom, "uart_cache_update"):
++        try:
++            eeprom.uart_cache_update()
++        except Exception as e:
++            raise Exception("Failed to init eeprom cache file : {}".format(e))
++    # Asterfusion end
+ 
+     sys_eeprom_data = eeprom.read_eeprom()
+     eeprom.decode_eeprom(sys_eeprom_data)
+diff --git a/scripts/fanshow b/scripts/fanshow
+index cdf750ab..3e80e716 100755
+--- a/scripts/fanshow
++++ b/scripts/fanshow
+@@ -22,15 +22,13 @@ except KeyError:
+ 
+ from swsscommon.swsscommon import SonicV2Connector
+ 
+-header = ['Drawer', 'LED', 'FAN', 'Speed', 'Direction', 'Presence', 'Status', 'Timestamp']
++header = ['FAN', 'Speed', 'Direction', 'Presence', 'Status', 'Timestamp']
+ 
+ FAN_TABLE_NAME = 'FAN_INFO'
+-DRAWER_FIELD_NAME = 'drawer_name'
+ SPEED_FIELD_NAME = 'speed'
+ DIRECTION_FIELD_NAME = 'direction'
+ PRESENCE_FIELD_NAME = 'presence'
+ STATUS_FIELD_NAME = 'status'
+-LED_STATUS_FIELD_NAME = 'led_status'
+ TIMESTAMP_FIELD_NAME = 'timestamp'
+ 
+ 
+@@ -72,7 +70,7 @@ class FanShow(object):
+             elif status_lower == 'false':
+                 status = 'Not OK'
+ 
+-            table.append((data_dict[DRAWER_FIELD_NAME], data_dict[LED_STATUS_FIELD_NAME], name, speed, data_dict[DIRECTION_FIELD_NAME], presence, status,
++            table.append((name, speed, data_dict[DIRECTION_FIELD_NAME], presence, status,
+                           data_dict[TIMESTAMP_FIELD_NAME]))
+         if table:
+             print(tabulate(table, header, tablefmt='simple', stralign='right'))
+diff --git a/tests/fan_test.py b/tests/fan_test.py
+index 96a97acc..cba8811d 100644
+--- a/tests/fan_test.py
++++ b/tests/fan_test.py
+@@ -21,11 +21,11 @@ class TestFan(object):
+         result = runner.invoke(show.cli.commands["platform"].commands["fan"])
+         print(result.output)
+         expected = """\
+-  Drawer    LED    FAN    Speed    Direction    Presence    Status          Timestamp
+---------  -----  -----  -------  -----------  ----------  --------  -----------------
+- drawer1    red   fan1      30%       intake     Present        OK  20200813 01:32:30
+- drawer2  green   fan2      50%       intake     Present    Not OK  20200813 01:32:30
+- drawer3  green   fan3      50%       intake     Present  Updating  20200813 01:32:30
++  FAN    Speed    Direction    Presence    Status          Timestamp
++-----  -------  -----------  ----------  --------  -----------------
++ fan1      30%       intake     Present        OK  20200813 01:32:30
++ fan2      50%       intake     Present    Not OK  20200813 01:32:30
++ fan3      50%       intake     Present  Updating  20200813 01:32:30
+ """
+ 
+         assert result.output == expected
+-- 
+2.25.1
+

@@ -1,0 +1,26 @@
+From 9a381f67136bde68bc03535e49bf28f0b83414fe Mon Sep 17 00:00:00 2001
+From: chenxu <chenxu@asterfusion.com>
+Date: Sun, 18 May 2025 20:36:34 -0700
+Subject: [PATCH] suit for asterfusion device
+
+Signed-off-by: chenxu <chenxu@asterfusion.com>
+---
+ syncd/SaiSwitch.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/syncd/SaiSwitch.cpp b/syncd/SaiSwitch.cpp
+index fb711db4..98203afa 100644
+--- a/syncd/SaiSwitch.cpp
++++ b/syncd/SaiSwitch.cpp
+@@ -1127,7 +1127,7 @@ void SaiSwitch::postPortRemove(
+ 
+     if (removed == 0)
+     {
+-        SWSS_LOG_THROW("NO LANES found in redis lane map for given port RID %s",
++        SWSS_LOG_NOTICE("NO LANES found in redis lane map for given port RID %s",
+                 sai_serialize_object_id(portRid).c_str());
+     }
+ 
+-- 
+2.25.1
+

@@ -1,0 +1,13 @@
+[Unit]
+Description=Asterfusion x206p-48s-ptp Platform initialization service
+Before=network.target
+DefaultDependencies=no
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/asterProcess/main.py install
+ExecStop=/usr/local/bin/asterProcess/main.py uninstall
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,22 @@
+#!/bin/bash
+
+if [ "$1" == "all" ]; then
+    if [ -r /usr/local/bin/asterfusion_x206p_48s_sensors.py ]; then
+        sudo python /usr/local/bin/asterfusion_x206p_48s_sensors.py show fans
+        sudo python /usr/local/bin/asterfusion_x206p_48s_sensors.py show temps
+        sudo python /usr/local/bin/asterfusion_x206p_48s_sensors.py show powers
+    fi
+elif [ "$1" == "fans" ]; then
+    sudo python /usr/local/bin/asterfusion_x206p_48s_sensors.py show fans
+elif [ "$1" == "temps" ]; then
+    sudo python /usr/local/bin/asterfusion_x206p_48s_sensors.py show temps
+elif [ "$1" == "powers" ]; then
+    sudo python /usr/local/bin/asterfusion_x206p_48s_sensors.py show powers
+else
+    echo "show environment [OPTIONS]"
+    echo "OPTIONS:"
+    echo "  all       Show system environment status"
+    echo "  fans      Show system fans status"
+    echo "  temps     Show system temps"
+    echo "  powers    Show system PSU powers"
+fi

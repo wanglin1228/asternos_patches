@@ -1,0 +1,43 @@
+#!/bin/bash
+
+declare -A come_type_code
+come_type_code=( ["Intel"]="e00"    #S02 COMe
+                 ["Insyde"]="e01"   #S01 COMe 3000
+                 ["Default string"]="e02" #Advantech COMe
+                 ['Advantech']='e02'    #Advantech COMe
+                 ['Congatec AG']="e03")  #congatec D1508
+
+start() {
+    # load platform driver, native drivers
+    come_type=$(dmidecode -s system-manufacturer)
+    #echo ${come_type}
+    come_id=${come_type_code[$come_type]}
+    if [ ! -n "${come_id}" ]; then
+        come_id="e01"
+    fi
+    # load platform driver, native drivers
+    rm -f /usr/local/bin/asterfusion_cx308p_util.py
+    ln -s /usr/local/bin/asterfusion_cx308p_util_fl00${come_id}.py /usr/local/bin/asterfusion_cx308p_util.py
+    # for now, sensors.py is the same
+    # rm -f /usr/local/bin/asterfusion_cx308p_sensors.py
+    # ln -s /usr/local/bin/asterfusion_cx308p_sensors_fl00${come_id}.py /usr/local/bin/asterfusion_cx308p_sensors.py
+    /usr/local/bin/asterfusion_cx308p_util.py install
+    #WA for uart_8250 init
+    bmc_get 0x1 0x21 0xaa
+    #create /var/cache/sonic/decode-ssyseeprom/syseeprom_cache
+    decode-syseeprom
+    modprobe mpls-router
+    modprobe mpls-iptunnel
+    sysctl -w net.mpls.platform_labels=1048575
+}
+
+stop() {
+    /usr/local/bin/asterfusion_cx308p_util.py clean
+    rm -f /usr/local/bin/asterfusion_cx308p_util.py
+}
+
+
+case $1 in 
+  start|stop) "$1" ;;
+esac
+

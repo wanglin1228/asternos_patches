@@ -1,0 +1,5 @@
+sonic-platform-asterfusion (1.0.0) unstable; urgency=low
+
+  * Add support for X206Y-48T-Ma series
+
+ -- developer <developer@Asterfusion.com>  Mon, 29 Jul 2021 11:00:00 +0800

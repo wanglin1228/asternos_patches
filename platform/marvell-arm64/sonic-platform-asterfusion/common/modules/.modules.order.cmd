@@ -1,0 +1,1 @@
+cmd_/sonic/platform/marvell-arm64/sonic-platform-asterfusion/common/modules/modules.order := {   cat /sonic/platform/marvell-arm64/sonic-platform-asterfusion/common/modules/cpss/modules.order; :; } | awk '!x[$$0]++' - > /sonic/platform/marvell-arm64/sonic-platform-asterfusion/common/modules/modules.order

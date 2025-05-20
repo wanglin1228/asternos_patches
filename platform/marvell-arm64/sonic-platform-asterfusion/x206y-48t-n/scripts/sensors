@@ -1,0 +1,34 @@
+#!/bin/bash
+
+if [ "$1" == "all" ]; then
+    if [ -r /usr/local/bin/asterfusion_cx206y_48t_sensors.py ]; then
+            sudo python /usr/local/bin/asterfusion_cx206y_48t_sensors.py show fans
+            sudo python /usr/local/bin/asterfusion_cx206y_48t_sensors.py show temps
+            sudo python /usr/local/bin/asterfusion_cx206y_48t_sensors.py show voltages
+            sudo python /usr/local/bin/asterfusion_cx206y_48t_sensors.py show pse
+            sudo python /usr/local/bin/asterfusion_cx206y_48t_sensors.py show powers
+            sudo python /usr/local/bin/asterfusion_cx206y_48t_sensors.py show smartfan
+    fi
+elif [ "$1" == "fans" ]; then
+    sudo python /usr/local/bin/asterfusion_cx206y_48t_sensors.py show fans
+elif [ "$1" == "powers" ]; then
+    sudo python /usr/local/bin/asterfusion_cx206y_48t_sensors.py show powers
+elif [ "$1" == "temps" ]; then
+    sudo python /usr/local/bin/asterfusion_cx206y_48t_sensors.py show temps
+elif [ "$1" == "voltages" ]; then
+    sudo python /usr/local/bin/asterfusion_cx206y_48t_sensors.py show voltages
+elif [ "$1" == "pse" ]; then
+    sudo python /usr/local/bin/asterfusion_cx206y_48t_sensors.py show pse
+elif [ "$1" == "smartfan" ]; then
+    sudo python /usr/local/bin/asterfusion_cx206y_48t_sensors.py show smartfan
+else
+    echo "show environment [OPTIONS]"
+    echo "OPTIONS:"
+    echo "  all       Show system environment status"
+    echo "  fans      Show system fans status"
+    echo "  powers    Show system PSU powers"
+    echo "  temps     Show system temps"
+    echo "  voltages  Show system voltages"
+    echo "  pse       Show system pse"
+    echo "  smartfan  Show system smartfan"
+fi

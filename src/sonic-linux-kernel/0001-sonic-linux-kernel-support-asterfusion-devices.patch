@@ -1,0 +1,95 @@
+From 8a0259da9f2c0d923585805228fe31dff136d2b8 Mon Sep 17 00:00:00 2001
+From: chenxu <chenxu@asterfusion.com>
+Date: Sun, 18 May 2025 20:30:37 -0700
+Subject: [PATCH] support asterfusion devices
+
+Signed-off-by: chenxu <chenxu@asterfusion.com>
+---
+ .../0023-support-ap807-sdhci-for-cn9130.patch | 24 +++++++++++++++++++
+ patch/kconfig-exclusions                      |  1 +
+ patch/kconfig-inclusions                      |  6 +++++
+ patch/series                                  |  1 +
+ 4 files changed, 32 insertions(+)
+ create mode 100644 patch/0023-support-ap807-sdhci-for-cn9130.patch
+
+diff --git a/patch/0023-support-ap807-sdhci-for-cn9130.patch b/patch/0023-support-ap807-sdhci-for-cn9130.patch
+new file mode 100644
+index 0000000..48e7aff
+--- /dev/null
++++ b/patch/0023-support-ap807-sdhci-for-cn9130.patch
+@@ -0,0 +1,24 @@
++From 4f604a1781c9cea32d9b6d3cb7ef872c72fb00df Mon Sep 17 00:00:00 2001
++From: wanglin <wanglin@asterfusion.com>
++Date: Sun, 27 Apr 2025 16:49:43 +0800
++Subject: [PATCH] support ap807-sdhci for cn9130.
++
++---
++ drivers/mmc/host/sdhci-xenon.c | 1 +
++ 1 file changed, 1 insertion(+)
++
++diff --git a/drivers/mmc/host/sdhci-xenon.c b/drivers/mmc/host/sdhci-xenon.c
++index 1ed5f3171..6eba88f49 100644
++--- a/drivers/mmc/host/sdhci-xenon.c
+++++ b/drivers/mmc/host/sdhci-xenon.c
++@@ -674,6 +674,7 @@ static const struct dev_pm_ops sdhci_xenon_dev_pm_ops = {
++ 
++ static const struct of_device_id sdhci_xenon_dt_ids[] = {
++ 	{ .compatible = "marvell,armada-ap806-sdhci",},
+++	{ .compatible = "marvell,armada-ap807-sdhci",},
++ 	{ .compatible = "marvell,armada-cp110-sdhci",},
++ 	{ .compatible = "marvell,armada-3700-sdhci",},
++ 	{ .compatible = "marvell,ac5-sdhci",},
++-- 
++2.17.1
++
+diff --git a/patch/kconfig-exclusions b/patch/kconfig-exclusions
+index 3249ab8..fed3103 100644
+--- a/patch/kconfig-exclusions
++++ b/patch/kconfig-exclusions
+@@ -15,6 +15,7 @@ CONFIG_MTD_SPI_NOR_USE_4K_SECTORS
+ # Unset X86_PAT according to Broadcom's requirement
+ CONFIG_X86_PAT
+ CONFIG_MLXSW_PCI
++CONFIG_I2C_ISMT
+ ###-> mellanox_amd64-start
+ ###-> mellanox_amd64-end
+ 
+diff --git a/patch/kconfig-inclusions b/patch/kconfig-inclusions
+index 8e486bf..f191f03 100644
+--- a/patch/kconfig-inclusions
++++ b/patch/kconfig-inclusions
+@@ -136,6 +136,9 @@ CONFIG_MTD_NAND_MARVELL=m
+ CONFIG_SENSORS_EMC2305=m
+ CONFIG_PHY_MVEBU_CP110_COMPHY=y
+ CONFIG_SPI_ORION=m
++CONFIG_MMC_SDHCI=y
++CONFIG_MMC_SDHCI_PLTFM=y
++CONFIG_MMC_SDHCI_XENON=y
+ # For pensando
+ CONFIG_CRYPTO_MANAGER_DISABLE_TESTS=y
+ CONFIG_DEVTMPFS_MOUNT=y
+@@ -167,6 +170,9 @@ CONFIG_KEXEC_FILE=y
+ 
+ [marvell-arm64]
+ CONFIG_MARVELL_AC5_WATCHDOG=m
++CONFIG_MMC_SDHCI=y
++CONFIG_MMC_SDHCI_PLTFM=y
++CONFIG_MMC_SDHCI_XENON=y
+ 
+ [pensando]
+ CONFIG_ARCH_PENSANDO=y
+diff --git a/patch/series b/patch/series
+index c6a395c..9773cdd 100755
+--- a/patch/series
++++ b/patch/series
+@@ -255,6 +255,7 @@ armhf_secondary_boot_online.patch
+ 0019-dt-bindings-marvell-Add-ARMADA-7K-properties.patch
+ 0020-dts-marvell-Add-support-for-7020-comexpress.patch
+ 0021-arm64-dts-marvell-Add-Nokia-7215-IXS-A1-board.patch
++0023-support-ap807-sdhci-for-cn9130.patch
+ 
+ # amd-pensando elba support
+ 0001-hwmon-ltc2978-Add-support-for-LTC3888.patch
+-- 
+2.25.1
+
