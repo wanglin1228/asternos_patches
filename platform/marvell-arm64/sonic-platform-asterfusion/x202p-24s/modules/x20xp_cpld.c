@@ -79,6 +79,7 @@
 #define PSU_STAT                    0x1C
 #define FAN_LEVEL                   0x1D
 #define HW_RESET                    0x1E
+#define SWITCH_FINISH               0x1F
 /* end of struct i2c_sysfs_attributes */
 
 #define EEPROM_WP_CTRL_BIT  7
@@ -264,15 +265,7 @@ static ssize_t cpld_byte_get(struct device *dev, struct device_attribute *da, ch
         status = asterfusion_x20xp_cpld_read_on_lock(client->addr, attr->index);
     }
 
-    if (CPLD_VER == attr->index)
-    {
-        sprintf(buf, "%sCPLD version", buf);
-    }
-    else if (BOARD_VER == attr->index)
-    {
-       sprintf(buf, "%sBoard version", buf);
-    }
-    return sprintf(buf, "%s is %02x\n", buf, status);
+    return sprintf(buf, "%02x", status);
 }
 
 static ssize_t sys_adc1_status_get(struct device *dev, struct device_attribute *da, char *buf)
@@ -630,7 +623,7 @@ static ssize_t sys_led_ctrl_get(struct device *dev, struct device_attribute *da,
     struct i2c_client *client = to_i2c_client(dev);
     struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
     
-    sprintf(buf, "SYS LED is set to: ");
+    sprintf(buf, "%s is set to: ", attr->index==SYS_LED?"SYS LED":"SWITCH FINISH");
     if (SYS_LED == attr->index)
     {
         status = asterfusion_x20xp_cpld_read_on_lock(client->addr, SYS_LED); //to get register 0x30 0x13
@@ -645,6 +638,13 @@ static ssize_t sys_led_ctrl_get(struct device *dev, struct device_attribute *da,
             sprintf(buf, "%sgreen\n", buf);
         }
     }
+    else
+    {
+        status = asterfusion_x20xp_cpld_read_on_lock(client->addr, SWITCH_FINISH); //to get register 0x30 0x13
+        status &= 0x1;
+
+        sprintf(buf, "%s%d\n", buf, status);
+    }
 
     return sprintf(buf, "%s", buf);
 }
@@ -656,9 +656,10 @@ static ssize_t sys_led_ctrl_set(struct device *dev, struct device_attribute *da,
     struct i2c_client *client = to_i2c_client(dev);
     struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
 
-    if (SYS_LED == attr->index)
+    if (SYS_LED == attr->index || SWITCH_FINISH == attr->index)
     {
         status = asterfusion_x20xp_cpld_write_on_lock(client->addr, attr->index, val & 0x1);
+        printk(KERN_NOTICE "Set %s to %d, status %d\r\n", attr->index==SYS_LED?"SYS_LED":"SWITCH_FINISH", (val & 0x1), status);
     }
     return count;
 }
@@ -784,6 +785,7 @@ static SENSOR_DEVICE_ATTR(qsfp28_2_rst      , S_IRUGO | S_IWUSR , rst2_ctl_get  
 static SENSOR_DEVICE_ATTR(qsfp28_1_rst      , S_IRUGO | S_IWUSR , rst2_ctl_get       , rst2_ctl_set       , QSFP28_1_RST_BIT);
 
 static SENSOR_DEVICE_ATTR(led_sys           , S_IRUGO | S_IWUSR , sys_led_ctrl_get  , sys_led_ctrl_set  , SYS_LED);//0x0A
+static SENSOR_DEVICE_ATTR(switch_finish     , S_IRUGO | S_IWUSR , sys_led_ctrl_get  , sys_led_ctrl_set  , SWITCH_FINISH);//0x1F
 
 static SENSOR_DEVICE_ATTR(eeprom_wp_ctrl    , S_IRUGO | S_IWUSR , cpld_ctrl1_get    , cpld_ctrl1_set    , EEPROM_WP_CTRL_BIT);//0x0B
 static SENSOR_DEVICE_ATTR(over_temp_ctrl    , S_IRUGO | S_IWUSR , cpld_ctrl1_get    , cpld_ctrl1_set    , OVER_TEMP_CTRL_BIT);
@@ -891,6 +893,7 @@ static struct attribute *X20XP_Led_attributes[] =
 {
     &sensor_dev_attr_led_sys.dev_attr.attr,
     &sensor_dev_attr_led_loc.dev_attr.attr,
+    &sensor_dev_attr_switch_finish.dev_attr.attr,
     NULL
 };
 

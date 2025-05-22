@@ -12,22 +12,13 @@ static ssize_t cpld_byte_get(struct device *dev, struct device_attribute *da, ch
 {
     u32 status = -EPERM;
     struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
-    sprintf(buf, "");
 
     if (CPLD_VER == attr->index || BOARD_VER == attr->index)
     {
         status = i2c_smbus_read_byte_data(x206y_48gt_i2c_client, attr->index);
     }
 
-    if (CPLD_VER == attr->index)
-    {
-        sprintf(buf, "%sCPLD version", buf);
-    }
-    else if (BOARD_VER == attr->index)
-    {
-       sprintf(buf, "%sBoard version", buf);
-    }
-    return sprintf(buf, "%s is %02x\n", buf, status);
+    return sprintf(buf, "%02x", status);
 }
 
 static ssize_t sfp_status_get(struct device *dev, struct device_attribute *da, char *buf)
@@ -401,6 +392,19 @@ static ssize_t fan_speed_set(struct device *dev, struct device_attribute *da, co
     }
 
     return count;
+}
+static ssize_t fan_num_get(struct device *dev, struct device_attribute *da, char *buf)
+{
+    u32 status = 0;
+    struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
+    sprintf(buf, "");
+
+    if (FAN_NUM == attr->index)
+    {
+        status = i2c_smbus_read_byte_data(x206y_48gt_i2c_client, attr->index);
+    }
+
+    return sprintf(buf, "%d", status);
 }
 static ssize_t themal_temp_get(struct device *dev, struct device_attribute *da, char *buf)
 {

@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import common 
+import poe
 
 class DeviceThread(common.threading.Thread):
 	def __init__(self,threadname, q):
@@ -63,6 +64,7 @@ class PlatformStatusThread(common.threading.Thread):
 		total_result += self.checkTempStatus()
 		total_result += self.checkFanStatus()
 		total_result += self.checkPsuStatus()
+		#total_result += self.checkPoeStatus()
 
 	def checkTempStatus(self):
 		return common.PASS
@@ -71,6 +73,10 @@ class PlatformStatusThread(common.threading.Thread):
 		return common.PASS
 
 	def checkPsuStatus(self):
+		return common.PASS
+
+	def checkPoeStatus(self):
+		poe.poe_db_update()
 		return common.PASS
 
 def deviceInit():

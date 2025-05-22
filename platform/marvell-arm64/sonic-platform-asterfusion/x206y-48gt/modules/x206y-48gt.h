@@ -100,6 +100,7 @@ static ssize_t fan_mode_set(struct device *dev, struct device_attribute *da, con
 static ssize_t fan_stat_get(struct device *dev, struct device_attribute *da, char *buf);
 static ssize_t fan_speed_get(struct device *dev, struct device_attribute *da, char *buf);
 static ssize_t fan_speed_set(struct device *dev, struct device_attribute *da, const char *buf, size_t count);
+static ssize_t fan_num_get(struct device *dev, struct device_attribute *da, char *buf);
 static ssize_t fan_board_sel_get(struct device *dev, struct device_attribute *da, char *buf);
 static ssize_t fan_board_sel_set(struct device *dev, struct device_attribute *da, const char *buf, size_t count);
 static ssize_t themal_temp_get(struct device *dev, struct device_attribute *da, char *buf);
@@ -159,6 +160,8 @@ enum Asterfusion_i2c_sysfs_attributes
     LOC_LED,    /*0x1E*/
     PSU_STAT,   /*0x1F*/
     HW_RESET,    /*0x20*/
+    FAN_SPEED_LEVEL, /*0x21*/
+    FAN_NUM,     /*0x22*/
 };
 /* end of struct i2c_sysfs_attributes */
 
@@ -215,6 +218,7 @@ static SENSOR_DEVICE_ATTR(fan3_present      , S_IRUGO           , fan_stat_get  
 static SENSOR_DEVICE_ATTR(fan_mode          , S_IRUGO | S_IWUSR , fan_mode_get      , fan_mode_set      , FAN_CTL1);//0x15
 static SENSOR_DEVICE_ATTR(fan_speed         , S_IRUGO | S_IWUSR , fan_speed_get     , fan_speed_set     , FAN_CTL2);//0x16
 static SENSOR_DEVICE_ATTR(fan_board_sel     , S_IRUGO | S_IWUSR , fan_board_sel_get , fan_board_sel_set , FAN_BOARD_SEL);//0x17
+static SENSOR_DEVICE_ATTR(fan_num           , S_IRUGO           , fan_num_get       , NULL              , FAN_NUM);//0x22
 
 static SENSOR_DEVICE_ATTR(fan_lm75_right    , S_IRUGO           , themal_temp_get   , NULL              , FAN_LM75_R);//0x18
 static SENSOR_DEVICE_ATTR(fan_lm75_left     , S_IRUGO           , themal_temp_get   , NULL              , FAN_LM75_L);//0x19
@@ -292,6 +296,7 @@ static struct attribute *X206Y_48GT_FAN_attributes[] = {
     &sensor_dev_attr_fan_mode.dev_attr.attr,
     &sensor_dev_attr_fan_speed.dev_attr.attr,
     &sensor_dev_attr_fan_board_sel.dev_attr.attr,
+    &sensor_dev_attr_fan_num.dev_attr.attr,
     NULL
 };
 

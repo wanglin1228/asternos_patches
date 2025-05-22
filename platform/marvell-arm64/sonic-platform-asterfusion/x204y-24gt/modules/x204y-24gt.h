@@ -95,10 +95,14 @@ static ssize_t fan_mode_set(struct device *dev, struct device_attribute *da, con
 static ssize_t fan_stat_get(struct device *dev, struct device_attribute *da, char *buf);
 static ssize_t fan_speed_get(struct device *dev, struct device_attribute *da, char *buf);
 static ssize_t fan_speed_set(struct device *dev, struct device_attribute *da, const char *buf, size_t count);
+static ssize_t fan_num_get(struct device *dev, struct device_attribute *da, char *buf);
 static ssize_t themal_temp_get(struct device *dev, struct device_attribute *da, char *buf);
 static ssize_t hw_reset_get(struct device *dev, struct device_attribute *da, char *buf);
 static ssize_t hw_reset_set(struct device *dev, struct device_attribute *da, const char *buf, size_t count);
-
+static ssize_t device_type_get(struct device *dev, struct device_attribute *da, char *buf);
+static ssize_t device_type_set(struct device *dev, struct device_attribute *da, const char *buf, size_t count);
+static ssize_t poe_percent_get(struct device *dev, struct device_attribute *da, char *buf);
+static ssize_t poe_percent_set(struct device *dev, struct device_attribute *da, const char *buf, size_t count);
 
 /* end of Function Declaration */
 
@@ -150,6 +154,10 @@ enum Asterfusion_i2c_sysfs_attributes
     LOC_LED,    /*0x1E*/
     RESERVE7,   /*0x1F*/
     HW_RESET,    /*0x20*/
+    FAN_GEAR,    /*0x21*/
+    DEVICE_TYPE,    /*0x22*/
+    POE_PERCENT,    /*0x23*/
+    FAN_NUM,    /*0x24*/
 };
 /* end of struct i2c_sysfs_attributes */
 
@@ -200,6 +208,7 @@ static SENSOR_DEVICE_ATTR(fan3_status       , S_IRUGO           , fan_stat_get  
 
 static SENSOR_DEVICE_ATTR(fan_mode          , S_IRUGO | S_IWUSR , fan_mode_get      , fan_mode_set      , FAN_CTL1);//0x15
 static SENSOR_DEVICE_ATTR(fan_speed         , S_IRUGO | S_IWUSR , fan_speed_get     , fan_speed_set     , FAN_CTL2);//0x16
+static SENSOR_DEVICE_ATTR(fan_num           , S_IRUGO           , fan_num_get       , NULL              , FAN_NUM);//0x22
 
 static SENSOR_DEVICE_ATTR(ac5x_lm75         , S_IRUGO           , themal_temp_get   , NULL              , AC5X_LM75);//0x1A
 
@@ -207,6 +216,8 @@ static SENSOR_DEVICE_ATTR(led_loc           , S_IRUGO | S_IWUSR , loc_led_ctrl_g
 
 static SENSOR_DEVICE_ATTR(hw_reset          , S_IRUGO           , hw_reset_get       , hw_reset_set      , HW_RESET);
 
+static SENSOR_DEVICE_ATTR(device_type       , S_IRUGO | S_IWUSR , device_type_get    , device_type_set   , DEVICE_TYPE);
+static SENSOR_DEVICE_ATTR(poe_percent       , S_IRUGO | S_IWUSR , poe_percent_get    , poe_percent_set   , POE_PERCENT);
 
 
 /* end of sysfs attributes for SENSOR_DEVICE_ATTR */
@@ -221,6 +232,8 @@ static struct attribute *X204Y_24GT_SYS_attributes[] =
     &sensor_dev_attr_eeprom_wp_ctrl.dev_attr.attr,
     &sensor_dev_attr_over_temp_ctrl.dev_attr.attr,
     &sensor_dev_attr_wdt_ctrl.dev_attr.attr,
+    &sensor_dev_attr_device_type.dev_attr.attr,
+    &sensor_dev_attr_poe_percent.dev_attr.attr,
     NULL
 };
 
@@ -259,6 +272,7 @@ static struct attribute *X204Y_24GT_FAN_attributes[] = {
     &sensor_dev_attr_fan3_status.dev_attr.attr,
     &sensor_dev_attr_fan_mode.dev_attr.attr,
     &sensor_dev_attr_fan_speed.dev_attr.attr,
+    &sensor_dev_attr_fan_num.dev_attr.attr,
     NULL
 };
 

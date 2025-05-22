@@ -128,7 +128,7 @@ static ssize_t read_cpld_version(struct device *dev, struct device_attribute *da
 
     data = asterfusion_cx204y_48s_cpld_read(client->addr, reg);
 
-    return sprintf(buf, "%02x\n", data & 0x7);
+    return sprintf(buf, "%02x", data & 0x7);
 }
 
 
@@ -332,7 +332,7 @@ static int asterfusion_cx204y_48s_cpld_remove(struct i2c_client *client)
             break;
     }
   
-    asterfusion_cx204y_48s_cpld_remove_client(client);  
+    asterfusion_cx204y_48s_cpld_remove_client(client);
     return 0;
 }
 

@@ -29,6 +29,7 @@ TEMP_LIST = ['switch_lm75', 'cpu_lm75', 'fan_lm75_left', 'fan_lm75_right']
 
 TEMP_PATH        = '/sys/bus/i2c/devices/6-0040/X20XP_Sensor/'
 FAN_PATH         = '/sys/bus/i2c/devices/6-0040/X20XP_FAN/'
+SYS_PATH         = '/sys/bus/i2c/devices/6-0040/X20XP_SYS/'
 
 
 
@@ -144,6 +145,15 @@ def show_psu_status(path):
     print('')
     return
 
+def system_info():
+    print('SYSTEM:')
+    result = get_attr_value(SYS_PATH + 'cpld_version')
+    print("     cpld version 0x{}".format(result))
+    result = get_attr_value(SYS_PATH + 'board_version')
+    print("     board version 0x{}".format(result))
+    print('')
+    return
+
 # ==================== CLI commands and groups ====================
 
 # This is our main entrypoint - the main 'environment' command
@@ -175,6 +185,11 @@ def temps():
 def powers():
     """Display Platform environment powers"""
     psu_status()
+
+@show.command()
+def system():
+    """Display Platform environment system"""
+    system_info();
 
 if __name__ == "__main__":
     cli()

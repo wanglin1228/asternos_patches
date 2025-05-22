@@ -8,6 +8,7 @@ if [ "$1" == "all" ]; then
             sudo python /usr/local/bin/asterfusion_cx206y_48t_sensors.py show pse
             sudo python /usr/local/bin/asterfusion_cx206y_48t_sensors.py show powers
             sudo python /usr/local/bin/asterfusion_cx206y_48t_sensors.py show smartfan
+            sudo python /usr/local/bin/asterfusion_cx206y_48t_sensors.py show system
     fi
 elif [ "$1" == "fans" ]; then
     sudo python /usr/local/bin/asterfusion_cx206y_48t_sensors.py show fans
@@ -21,6 +22,8 @@ elif [ "$1" == "pse" ]; then
     sudo python /usr/local/bin/asterfusion_cx206y_48t_sensors.py show pse
 elif [ "$1" == "smartfan" ]; then
     sudo python /usr/local/bin/asterfusion_cx206y_48t_sensors.py show smartfan
+elif [ "$1" == "system" ]; then
+    sudo python /usr/local/bin/asterfusion_cx206y_48t_sensors.py show system
 else
     echo "show environment [OPTIONS]"
     echo "OPTIONS:"
@@ -31,4 +34,5 @@ else
     echo "  voltages  Show system voltages"
     echo "  pse       Show system pse"
     echo "  smartfan  Show system smartfan"
+    echo "  system    Show system hardware info"
 fi

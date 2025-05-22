@@ -1,9 +1,8 @@
-From 257d4c30fce1e8ff44abbd906dd3887143fda8b2 Mon Sep 17 00:00:00 2001
+From 51383394ba3b4542057ec2293e2babc0d99da5d7 Mon Sep 17 00:00:00 2001
 From: chenxu <chenxu@asterfusion.com>
-Date: Mon, 19 May 2025 01:50:48 -0700
-Subject: [PATCH] support asterfusion devices
+Date: Thu, 22 May 2025 15:30:17 +0800
+Subject: [PATCH] support asterfusion devices.
 
-Signed-off-by: chenxu <chenxu@asterfusion.com>
 ---
  build_debian.sh                               |  1 +
  .../docker-pmon.supervisord.conf.j2           | 13 +++
@@ -11,8 +10,8 @@ Signed-off-by: chenxu <chenxu@asterfusion.com>
  files/build_templates/docker_image_ctl.j2     |  1 +
  .../build_templates/sonic_debian_extension.j2 |  8 +-
  files/image_config/platform/rc.local          |  5 +
- platform/marvell-arm64/one-image.mk           | 20 ++++
- platform/marvell-arm64/platform.conf          | 69 +++++++------
+ platform/marvell-arm64/one-image.mk           | 24 ++++-
+ platform/marvell-arm64/platform.conf          | 72 ++++++++------
  platform/marvell-arm64/rules.mk               |  1 +
  platform/marvell-arm64/sai/Makefile           |  2 +-
  platform/marvell-arm64/sonic_fit.its          | 99 +++++++------------
@@ -20,17 +19,17 @@ Signed-off-by: chenxu <chenxu@asterfusion.com>
  platform/marvell/rules.mk                     |  1 +
  platform/marvell/sai/Makefile                 |  2 +-
  rules/docker-platform-monitor.mk              |  1 +
- 15 files changed, 131 insertions(+), 95 deletions(-)
+ 15 files changed, 133 insertions(+), 100 deletions(-)
 
 diff --git a/build_debian.sh b/build_debian.sh
-index 5ea15d18f..f1291c5a7 100755
+index 5ea15d18f..538933848 100755
 --- a/build_debian.sh
 +++ b/build_debian.sh
 @@ -789,6 +789,7 @@ if [[ $TARGET_BOOTLOADER == uboot ]]; then
          ## Overwriting the initrd image with uInitrd
          sudo LANG=C chroot $FILESYSTEM_ROOT mv /boot/u${INITRD_FILE} /boot/$INITRD_FILE
      elif [[ $CONFIGURED_ARCH == arm64 ]]; then
-+	sudo cp -v $PLATFORM_DIR/${sonic_asic_platform}-${CONFIGURED_ARCH}/*.dtb $FILESYSTEM_ROOT/boot/
++        sudo cp -v $PLATFORM_DIR/${sonic_asic_platform}-${CONFIGURED_ARCH}/*.dtb $FILESYSTEM_ROOT/boot/
          sudo cp -v $PLATFORM_DIR/${sonic_asic_platform}-${CONFIGURED_ARCH}/sonic_fit.its $FILESYSTEM_ROOT/boot/
          sudo LANG=C chroot $FILESYSTEM_ROOT mkimage -f /boot/sonic_fit.its /boot/sonic_${CONFIGURED_ARCH}.fit
      fi
@@ -131,13 +130,17 @@ index 1848c56f3..75985e215 100755
  fi
  
 diff --git a/platform/marvell-arm64/one-image.mk b/platform/marvell-arm64/one-image.mk
-index 1aa36f2b1..b6402b7dc 100644
+index 1aa36f2b1..3e8f25231 100644
 --- a/platform/marvell-arm64/one-image.mk
 +++ b/platform/marvell-arm64/one-image.mk
-@@ -8,6 +8,26 @@ $(SONIC_ONE_IMAGE)_INSTALLS += $(MRVL_PRESTERA_DEB)
- $(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(NOKIA_7215_PLATFORM) \
- 				$(AC5X_RD98DX35xx_PLATFORM) \
- 				$(AC5X_RD98DX35xxCN9131_PLATFORM)
+@@ -4,10 +4,26 @@ SONIC_ONE_IMAGE = sonic-marvell-arm64.bin
+ $(SONIC_ONE_IMAGE)_MACHINE = marvell-arm64
+ $(SONIC_ONE_IMAGE)_IMAGE_TYPE = onie
+ $(SONIC_ONE_IMAGE)_INSTALLS += $(SYSTEMD_SONIC_GENERATOR)
+-$(SONIC_ONE_IMAGE)_INSTALLS += $(MRVL_PRESTERA_DEB)
+-$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(NOKIA_7215_PLATFORM) \
+-				$(AC5X_RD98DX35xx_PLATFORM) \
+-				$(AC5X_RD98DX35xxCN9131_PLATFORM)
 +$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(ASTERFUSION_X204Y-48T-M_PLATFORM_MODULE)
 +$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(ASTERFUSION_X204Y-48S-M_PLATFORM_MODULE)
 +$(SONIC_ONE_IMAGE)_LAZY_INSTALLS += $(ASTERFUSION_X206Y-48T-N_PLATFORM_MODULE)
@@ -162,15 +165,22 @@ index 1aa36f2b1..b6402b7dc 100644
  $(SONIC_ONE_IMAGE)_DOCKERS += $(SONIC_INSTALL_DOCKER_DBG_IMAGES)
  $(SONIC_ONE_IMAGE)_DOCKERS += $(filter-out $(patsubst %-$(DBG_IMAGE_MARK).gz,%.gz, $(SONIC_INSTALL_DOCKER_DBG_IMAGES)), $(SONIC_INSTALL_DOCKER_IMAGES))
 diff --git a/platform/marvell-arm64/platform.conf b/platform/marvell-arm64/platform.conf
-index 24902b795..763aaa282 100644
+index 24902b795..5e4221928 100644
 --- a/platform/marvell-arm64/platform.conf
 +++ b/platform/marvell-arm64/platform.conf
-@@ -24,22 +24,29 @@ else
+@@ -19,27 +19,35 @@ demo_volume_label=SONiC-OS
+ demo_mnt=/tmp
+ 
+ if [ "$install_env" = "onie" ]; then
+-    MACH_FILE="/etc/machine.conf"
++    PLATFORM=$(onie-syseeprom -g 0x28)
++    onie_platform=$PLATFORM
+ else
      MACH_FILE="/host/machine.conf"
++    PLATFORM=`sed -n 's/^onie_platform=\(.*\)/\1/p' $MACH_FILE`
  fi
  
 -PLATFORM=`sed -n 's/^onie_platform=\(.*\)/\1/p' $MACH_FILE`
-+PLATFORM=$(onie-syseeprom -g 0x28)
  echo "Intalling SONiC from $install_env on Platform $PLATFORM"
  
  PLATFORM_AC5X=0
@@ -206,7 +216,7 @@ index 24902b795..763aaa282 100644
  esac
  
  if [ $PLATFORM_AC5X -eq 1 ]; then
-@@ -47,21 +54,23 @@ if [ $PLATFORM_AC5X -eq 1 ]; then
+@@ -47,21 +55,23 @@ if [ $PLATFORM_AC5X -eq 1 ]; then
      fit_addr=0x210000000
      initrd_addr=0x206000000
  
@@ -243,7 +253,7 @@ index 24902b795..763aaa282 100644
      mmc_bus="mmc0:0001"
  else
      fdt_addr=0x1000000
-@@ -178,6 +187,11 @@ prepare_boot_menu() {
+@@ -178,6 +188,11 @@ prepare_boot_menu() {
      fdt_name=${image_dir}${fdt_fname}
      fit_name=${image_dir}${fit_fname}
  
@@ -255,7 +265,7 @@ index 24902b795..763aaa282 100644
      if [ "$install_env" = "onie" ]; then
          FW_ARG="-f"
          fw_setenv ${FW_ARG} image_dir_old "" > /dev/null
-@@ -217,17 +231,15 @@ prepare_boot_menu() {
+@@ -217,17 +232,15 @@ prepare_boot_menu() {
      fw_setenv ${FW_ARG} sonic_version_1 $demo_volume_revision_label > /dev/null
      BOOT1='echo " > Boot1: $sonic_version_1 - run sonic_image_1";echo;'
      BOOT2='echo " > Boot2: $sonic_version_2 - run sonic_image_2";echo;'
@@ -275,7 +285,7 @@ index 24902b795..763aaa282 100644
      fw_setenv ${FW_ARG} kernel_addr $kernel_addr > /dev/null
      fw_setenv ${FW_ARG} fdt_addr $fdt_addr > /dev/null
      fw_setenv ${FW_ARG} fit_addr $fit_addr > /dev/null
-@@ -243,7 +255,6 @@ prepare_boot_menu() {
+@@ -243,7 +256,6 @@ prepare_boot_menu() {
      fw_setenv ${FW_ARG} sonic_image_1 "$SONIC_BOOT_CMD" > /dev/null
      fw_setenv ${FW_ARG} boot_next  'run sonic_image_1'> /dev/null
      fw_setenv ${FW_ARG} bootcmd 'run print_menu; usb start; test -n "$boot_once" && setenv do_boot_once "$boot_once" && setenv boot_once "" && saveenv && run do_boot_once; run boot_next' > /dev/null
@@ -296,7 +306,7 @@ index 882a9451e..427a5d9ac 100644
  SONIC_ALL += $(SONIC_ONE_IMAGE) \
               $(DOCKER_FPM) 	\
 diff --git a/platform/marvell-arm64/sai/Makefile b/platform/marvell-arm64/sai/Makefile
-index a23b45843..f536d9dce 100644
+index a23b45843..ca667fe5c 100644
 --- a/platform/marvell-arm64/sai/Makefile
 +++ b/platform/marvell-arm64/sai/Makefile
 @@ -2,7 +2,7 @@
@@ -304,7 +314,7 @@ index a23b45843..f536d9dce 100644
  .SHELLFLAGS += -e
  
 -MRVL_SAI_URL = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/master/arm64/sai-plugin/202311/$(MRVL_SAI)
-+MRVL_SAI_URL = https://github.com/asterfusion/asternos_binaries/tree/main/marvell/arm64/sai/$(MRVL_SAI)
++MRVL_SAI_URL = https://github.com/asterfusion/asternos_binaries/raw/main/marvell/arm64/sai/$(MRVL_SAI)
  
  $(addprefix $(DEST)/, $(MRVL_SAI)): $(DEST)/% :
  	# get deb package
@@ -511,7 +521,7 @@ index da23e53f2..186eb9bf7 100644
  include $(PLATFORM_PATH)/docker-syncd-mrvl-rpc.mk
  include $(PLATFORM_PATH)/libsaithrift-dev.mk
 diff --git a/platform/marvell/sai/Makefile b/platform/marvell/sai/Makefile
-index 3438dab61..8cef8098b 100644
+index 3438dab61..3de6bfee9 100644
 --- a/platform/marvell/sai/Makefile
 +++ b/platform/marvell/sai/Makefile
 @@ -2,7 +2,7 @@
@@ -519,7 +529,7 @@ index 3438dab61..8cef8098b 100644
  .SHELLFLAGS += -e
  
 -MRVL_SAI_URL = https://github.com/Marvell-switching/sonic-marvell-binaries/raw/master/amd64/sai-plugin/202311/$(MRVL_SAI)
-+MRVL_SAI_URL = https://github.com/asterfusion/asternos_binaries/tree/main/marvell/amd64/sai/$(MRVL_SAI)
++MRVL_SAI_URL = https://github.com/asterfusion/asternos_binaries/raw/main/marvell/amd64/sai/$(MRVL_SAI)
  
  $(addprefix $(DEST)/, $(MRVL_SAI)): $(DEST)/% :
  	# get deb package
@@ -536,5 +546,5 @@ index 6652dfe18..6baa98bed 100644
  ifeq ($(PDDF_SUPPORT),y)
  $(DOCKER_PLATFORM_MONITOR)_PYTHON_WHEELS += $(PDDF_PLATFORM_API_BASE_PY3)
 -- 
-2.25.1
+2.17.1
 

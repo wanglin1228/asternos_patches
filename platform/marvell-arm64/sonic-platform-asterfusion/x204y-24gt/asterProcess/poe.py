@@ -3,16 +3,22 @@
 
 import os
 import logging
+import common
 from swsscommon.swsscommon import ConfigDBConnector, SonicV2Connector, SonicDBConfig
 
+POE_POWER = "power(W)"
 
-POE_INFO_CURRENT_FIELD = 'current(A)'
-POE_INFO_POWER_FIELD = 'power(W)'
-POE_INFO_VOLTAGE_FIELD = 'voltage(V)'
-POE_INFO_TEMP_FIELD = 'temperature(C)'
-POE_INFO_MAX_POWER_FIELD = "max_power(W)"
+def state_db_poe_status_get(state_db, intf_name, status_type):
+    """
+    Get the port status
+    """
+    full_table_id = "POE_INFO|" + intf_name
+    status = state_db.get(state_db.STATE_DB, full_table_id, status_type)
+    if status is None:
+        return "N/A"
+    return status
 
-def poe_db_update():
+def poe_update_percent(PSU_max_power):
     config_db = ConfigDBConnector()
     try:
         config_db.connect()
@@ -29,41 +35,12 @@ def poe_db_update():
     except Exception as error:
         return False
 
+    poe_power_sum = 0
+
     for interface_name in port_dict.keys():
-        try:
-            media_type = port_dict[interface_name]['media_type']
-        except KeyError:
-            media_type = 'Unknown'
-        try:
-            poe_status = port_dict[interface_name]['poe_status']
-        except KeyError:
-            poe_status = 'Unknown'
-        
-        if media_type == 'copper' and poe_status == 'enable':
-            index = int(port_dict[interface_name]['index'])
-            cmd = "API_BT_Share_workspace 0x02 0x82 0X05 0XC5 0X%02X 0X4E 0X4E 0X4E 0X4E 0X4E 0X4E 0X4E 0X4E" % index
-            try:
-                ret = os.popen(cmd)
-            except Exception as error:
-                logging.error("Unable to exec ", cmd, " !")
-                return False
+        POE_power_value = state_db_poe_status_get(state_db, interface_name, POE_POWER)
+        if POE_power_value != 'N/A':
+            poe_power_sum += float(POE_power_value)
 
-            read_back = ret.readlines()[2].split()[2:]   #'read back: 0x52 0xdf 0x01 0x00 0x4e 0x4e 0x4e 0x4e 0x4e 0x4e 0x4e 0x4e 0x4e 0x03 0xf0 \n'
-            if len(read_back) ==0 or len(read_back) < 13:
-                current = voltage = power = temp = max_power = 'N/A'
-            else:
-                current_value = ((int(read_back[4],16) << 8) + int(read_back[5],16)) * 0.001
-                voltage_value = ((int(read_back[9],16) << 8) + int(read_back[10],16)) * 0.1
-                power = '%.3f' % (current_value * voltage_value)
-                current = '%.4f' % current_value
-                voltage = '%.3f' % voltage_value
-                temp = 'N/A'
-                max_power = '30'
-        else:
-            current = voltage = power = temp = max_power = 'N/A'
-
-        state_db.set(state_db.STATE_DB, 'POE_INFO|{}'.format(interface_name), POE_INFO_CURRENT_FIELD, current)
-        state_db.set(state_db.STATE_DB, 'POE_INFO|{}'.format(interface_name), POE_INFO_VOLTAGE_FIELD, voltage)
-        state_db.set(state_db.STATE_DB, 'POE_INFO|{}'.format(interface_name), POE_INFO_POWER_FIELD, power)
-        state_db.set(state_db.STATE_DB, 'POE_INFO|{}'.format(interface_name), POE_INFO_TEMP_FIELD, temp)
-        state_db.set(state_db.STATE_DB, 'POE_INFO|{}'.format(interface_name), POE_INFO_MAX_POWER_FIELD, max_power)
+    poe_percent = poe_power_sum * 100 / PSU_max_power
+    result = common.writeFile(common.I2C_PREFIX + common.SYS_PATH + 'poe_percent', poe_percent)

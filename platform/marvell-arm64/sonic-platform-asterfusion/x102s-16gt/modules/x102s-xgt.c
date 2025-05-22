@@ -19,15 +19,7 @@ static ssize_t cpld_byte_get(struct device *dev, struct device_attribute *da, ch
         status = i2c_smbus_read_byte_data(x102s_xgt_i2c_client, attr->index);
     }
 
-    if (CPLD_VER == attr->index)
-    {
-        sprintf(buf, "%sCPLD version", buf);
-    }
-    else if (BOARD_VER == attr->index)
-    {
-       sprintf(buf, "%sBoard version", buf);
-    }
-    return sprintf(buf, "%s is %02x\n", buf, status);
+    return sprintf(buf, "%02x", status);
 }
 
 static ssize_t sfp_status_get(struct device *dev, struct device_attribute *da, char *buf)

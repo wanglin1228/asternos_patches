@@ -29,6 +29,7 @@ TEMP_LIST = ['ac5x_lm75', 'fan_lm75_left', 'fan_lm75_right']
 
 TEMP_PATH        = '/sys/bus/i2c/devices/6-0040/X206Y_48GT_Sensor/'
 FAN_PATH         = '/sys/bus/i2c/devices/6-0040/X206Y_48GT_FAN/'
+SYS_PATH         = '/sys/bus/i2c/devices/6-0040/X206Y_48GT_SYS/'
 
 
 
@@ -59,12 +60,24 @@ def sensors_temp():
     return
 
 def fan_speed():
+    result = get_attr_value(FAN_PATH + 'fan_num')
+    fan_num = 0
+    try:
+        fan_num = int(result,10)
+    except:
+        pass
+    if fan_num != 2:
+        fan_num = MAX_FAN_NUM
+    fan_num = 2*fan_num
     print('FAN SPEED:')
     for x in FAN_LIST:
         result = get_attr_value(FAN_PATH + x)
         speed = int(result) * 120
         print("    {} is {} RPM".format(x, speed))
-    print('')
+        fan_num -= 1
+        if fan_num <= 0:
+            break
+    print ('')
     return
 
 def get_psu_power(index):
@@ -145,6 +158,15 @@ def show_psu_status(path):
     print('')
     return
 
+def system_info():
+    print('SYSTEM:')
+    result = get_attr_value(SYS_PATH + 'cpld_version')
+    print("     cpld version 0x{}".format(result))
+    result = get_attr_value(SYS_PATH + 'board_version')
+    print("     board version 0x{}".format(result))
+    print('')
+    return
+
 # ==================== CLI commands and groups ====================
 
 # This is our main entrypoint - the main 'environment' command
@@ -176,6 +198,11 @@ def temps():
 def powers():
     """Display Platform environment powers"""
     psu_status()
+
+@show.command()
+def system():
+    """Display Platform environment system"""
+    system_info();
 
 if __name__ == "__main__":
     cli()

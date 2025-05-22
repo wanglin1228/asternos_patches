@@ -3,12 +3,14 @@ This repository is a patch provided for SONiC community to support AsterFusion s
 The branch of this repository corresponds to the branch of sonic-buildimage. eg 202311 of sonic-campus-patches corresponds to 202311 of sonic-buildimage.
 
 # How to apply patches
-1. 'make init' must be executed in sonic-buildimage first.
+1. Download SONiC buildimage
+   git clone https://github.com/sonic-net/sonic-buildimage.git -b 202311
 2. Install the repository into the sonic-buildimage directory.
-   e.g git clone URL_ADDRESS   e.g git clone https://github.com/asterfusion/sonic-campus-patches.git
-3. Switch to the corresponding branch.
-   e.g git checkout 202311
-4. sudo ./install.sh
+   git clone https://github.com/asterfusion/asternos_patches.git -b 202311
+3. Checkout SONiC to designated commit id
+   git checkout $COMMIT_ID (you can find it in the install.sh)
+4. 'make init' in sonic_buildimage path
+5. './install.sh' in asternos_patches path
 
 # Supported platforms
 
@@ -40,13 +42,9 @@ The branch of this repository corresponds to the branch of sonic-buildimage. eg 
 | Asterfusion | cx204y_24gt_c | Marvell | CX204Y-24GT-M-S |
 | Asterfusion | cx204y_24gt_c | Marvell | CX204Y-24GT-M-SWP2 |
 | Asterfusion | cx204y_24gt_c | Marvell | CX204Y-24GT-M-SWP4 |
-| Asterfusion | cx204y_48gt_a | Marvell | CX204Y-48GT-C-M-AC |
-| Asterfusion | cx204y_48gt_a | Marvell | CX204Y-48GT-M |
 | Asterfusion | cx204y_48gt_d | Marvell | CX204Y-48GT-HPW2-M-ACM |
 | Asterfusion | cx204y_48gt_d | Marvell | CX204Y-48GT-M-AC |
 | Asterfusion | cx204y_48gt_d | Marvell | CX204Y-48GT-M-S |
-| Asterfusion | cx204y_48s | Marvell | CX204Y-48S-C-M-AC |
-| Asterfusion | cx204y_48s | Marvell | CX204Y-48S-M |
 | Asterfusion | cx206p_24s | Marvell | CX206P-24S-M |
 | Asterfusion | cx206p_24s | Marvell | CX206P-24S-M-H |
 | Asterfusion | cx206p_48s_ptp | Marvell | CX206P-48S-PTP-M |

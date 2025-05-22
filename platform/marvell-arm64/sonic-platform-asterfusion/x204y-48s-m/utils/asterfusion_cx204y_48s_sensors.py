@@ -27,6 +27,7 @@ TEMP_DICT = {
 
 TEMP_PATH        = '/sys/class/hwmon/'
 FAN_PATH         = '/sys/bus/i2c/devices/0-0030/'
+SYS_PATH         = '/sys/bus/i2c/devices/0-0030/'
 
 
 
@@ -66,6 +67,15 @@ def fan_speed():
     print('')
     return
 
+def system_info():
+    print('SYSTEM:')
+    result = get_attr_value(SYS_PATH + 'cpld_version')
+    print("     cpld version 0x{}".format(result))
+    result = get_attr_value(SYS_PATH + 'board_version')
+    print("     board version 0x{}".format(result))
+    print('')
+    return
+
 # ==================== CLI commands and groups ====================
 
 # This is our main entrypoint - the main 'environment' command
@@ -91,6 +101,11 @@ def fans():
 def temps():
     """Display Platform environment temps"""
     sensors_temp()
+
+@show.command()
+def system():
+    """Display Platform environment system"""
+    system_info();
 
 if __name__ == "__main__":
     cli()

@@ -66,8 +66,6 @@
 #define CMIS_NOT_PAGEABLE           (1<<7)
 #define TWO_ADDR_PAGEABLE_REG       0x40
 #define TWO_ADDR_PAGEABLE           (1<<4)
-#define TWO_ADDR_0X51_REG           92
-#define TWO_ADDR_0X51_SUPP          (1<<6)
 #define SFP_ID_REG                  0
 #define SFP_READ_OP                 0
 #define SFP_WRITE_OP                1
@@ -337,6 +335,7 @@ static ssize_t x20xp_xxs_sfp_eeprom_update_client(struct x20xp_xxs_sfp_data *sfp
         phy_offset += status;
         count -= status;
         retval += status;
+        usleep_range(3000,4000);
     }
 
     if (page > 0) {
@@ -380,45 +379,19 @@ static ssize_t x20xp_xxs_sfp_page_legal(struct x20xp_xxs_sfp_data *sfp,
 
     if (sfp->chip[num].dev_class == TWO_ADDR) {
         /* SFP case */
-        /* if only using addr 0x50 (first 256 bytes) we're good */
-        if ((off + len) <= TWO_ADDR_NO_0X51_SIZE)
+        /* if access is within addr 0x50 or first page of 0x51 (first 512 bytes) we're good */
+		if ((off + len) <= TWO_ADDR_EEPROM_UNPAGED_SIZE)
             return len;
         /* if offset exceeds possible pages, we're not good */
         if (off >= TWO_ADDR_EEPROM_SIZE)
             return SFP_EOF;
         /* in between, are pages supported? */
 
-        status = x20xp_xxs_sfp_eeprom_read(sfp, client, &regval,
-                TWO_ADDR_PAGEABLE_REG, 1);
+        /* pages not supported, trim len to unpaged size */
+        if (off >= TWO_ADDR_EEPROM_UNPAGED_SIZE)
+            return SFP_EOF;
+        maxlen = TWO_ADDR_EEPROM_UNPAGED_SIZE - off;
 
-        if (status < 0)
-            return status;  /* error out (no module?) */
-        if (regval & TWO_ADDR_PAGEABLE) {
-            /* Pages supported, trim len to the end of pages */
-            maxlen = TWO_ADDR_EEPROM_SIZE - off;
-        } else {
-            /* pages not supported, trim len to unpaged size */
-            if (off >= TWO_ADDR_EEPROM_UNPAGED_SIZE)
-                return SFP_EOF;
-
-            /* will be accessing addr 0x51, is that supported? */
-            /* byte 92, bit 6 implies DDM support, 0x51 support */
-
-            status = x20xp_xxs_sfp_eeprom_read(sfp, client, &regval,
-                        TWO_ADDR_0X51_REG, 1);
-
-            if (status < 0)
-                return status;
-            if (regval & TWO_ADDR_0X51_SUPP) {
-                /* addr 0x51 is OK */
-                maxlen = TWO_ADDR_EEPROM_UNPAGED_SIZE - off;
-            } else {
-                /* addr 0x51 NOT supported, trim to 256 max */
-                if (off >= TWO_ADDR_NO_0X51_SIZE)
-                    return SFP_EOF;
-                maxlen = TWO_ADDR_NO_0X51_SIZE - off;
-            }
-        }
         len = (len > maxlen) ? maxlen : len;
         dev_dbg(&client->dev,
             "page_legal, SFP, off %lld len %ld\n",
@@ -581,11 +554,11 @@ static ssize_t x20xp_xxs_sfp_bin_read(struct file *filp, struct kobject *kobj,
             asterfusion_x20xp_read_lock();
             DBG(printk(KERN_ALERT "%s - asterfusion_x20xp_read_lock for interface %d!\n", __func__, i));
 
-            asterfusion_x20xp_cpld_reset();
             pca9548Reg = i/8 + PCA9548_0X73;
             asterfusion_x20xp_cpld_write(pca9548Reg, SFP_SCL_BASE, 1<<(i%8));
             retval = x20xp_xxs_sfp_read(sfp, buf, off, count, i);
 
+            asterfusion_x20xp_cpld_write(pca9548Reg, SFP_SCL_BASE, 0);
             asterfusion_x20xp_read_unlock();
 
             DBG(printk(KERN_ALERT "%s - asterfusion_x20xp_read_unlock for interface %d!\n", __func__, i));
@@ -692,6 +665,8 @@ static int x20xp_xxs_sfp_device_probe(struct i2c_client *client, const struct i2
 
     i2c_set_clientdata(client, sfp);
 
+    asterfusion_x20xp_cpld_reset();
+
     return 0;
 
 err_struct:
@@ -719,7 +694,6 @@ static int x20xp_xxs_sfp_device_remove(struct i2c_client *client)
         i2c_unregister_device(sfp->client[i]);
 
     kfree(sfp);
-
     return 0;
 }
 

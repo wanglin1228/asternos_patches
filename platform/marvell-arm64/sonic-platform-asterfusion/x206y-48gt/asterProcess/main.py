@@ -136,8 +136,9 @@ def doInstall():
 		status, output = common.doBash("echo " + o['driver'] + " " + o['address'] + " > " + common.I2C_PREFIX + o['bus'] + "/new_device")
 	status, output = common.doBash("modprobe x206y_48gt")
 	status, output = common.doBash("sysctl -w net.mpls.platform_labels=1048575")
-	status, output = common.doBash("echo -2 | tee /sys/bus/i2c/drivers/pca954x/*-00*/idle_state")
-        return
+	if os.path.exists("/sys/bus/i2c/drivers/pca954x"):
+		status, output = common.doBash("echo -2 | tee /sys/bus/i2c/drivers/pca954x/*-00*/idle_state")
+	return
 
 def setupThreads():
 	global THREADS, QUEUES
@@ -168,7 +169,7 @@ def setupThreads():
 def functionInit():
 	setupThreads()
 	for thread in THREADS:
-                thread.start()
+		thread.start()
 	return
 
 def deviceInit():

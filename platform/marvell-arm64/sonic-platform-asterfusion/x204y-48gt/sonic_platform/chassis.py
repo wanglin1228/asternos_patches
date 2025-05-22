@@ -104,6 +104,7 @@ class Chassis(ChassisBase):
         self._eeprom = Eeprom()
 
         # Initialize FAN
+        self.__num_of_fans = self.__get_num_fan()
         for index in range(1, self.__num_of_fans + 1):
             fan = Fan(index, False, 0)
             self._fan_list.append(fan)
@@ -134,6 +135,18 @@ class Chassis(ChassisBase):
         for index in range(0, self.__num_of_thermals):
             thermal = Thermal(index)
             self._thermal_list.append(thermal)
+
+    def __get_num_fan(self):
+        fan_num = 0
+        fan_num_path = "/sys/bus/i2c/devices/6-0040/X204Y_48GT_FAN/fan_num"
+        try:
+            with open(fan_num_path, 'r') as num_file:
+                fan_num = int(num_file.read(),10)
+        except:
+            pass
+        if fan_num != 2:
+            fan_num = self.__num_of_fans
+        return fan_num
 
 ##############################################
 # Device methods

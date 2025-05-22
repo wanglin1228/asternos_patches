@@ -19,15 +19,7 @@ static ssize_t cpld_byte_get(struct device *dev, struct device_attribute *da, ch
         status = i2c_smbus_read_byte_data(x204y_24gt_i2c_client, attr->index);
     }
 
-    if (CPLD_VER == attr->index)
-    {
-        sprintf(buf, "%sCPLD version", buf);
-    }
-    else if (BOARD_VER == attr->index)
-    {
-       sprintf(buf, "%sBoard version", buf);
-    }
-    return sprintf(buf, "%s is %02x\n", buf, status);
+    return sprintf(buf, "%02x", status);
 }
 
 static ssize_t sfp_status_get(struct device *dev, struct device_attribute *da, char *buf)
@@ -367,6 +359,19 @@ static ssize_t fan_speed_set(struct device *dev, struct device_attribute *da, co
 
     return count;
 }
+static ssize_t fan_num_get(struct device *dev, struct device_attribute *da, char *buf)
+{
+    u32 status = 0;
+    struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
+    sprintf(buf, "");
+
+    if (FAN_NUM == attr->index)
+    {
+        status = i2c_smbus_read_byte_data(x204y_24gt_i2c_client, attr->index);
+    }
+
+    return sprintf(buf, "%d", status);
+}
 static ssize_t themal_temp_get(struct device *dev, struct device_attribute *da, char *buf)
 {
     u32 status = -EPERM;
@@ -498,6 +503,62 @@ static ssize_t hw_reset_set(struct device *dev, struct device_attribute *da, con
     return count;
 }
 
+static ssize_t device_type_get(struct device *dev, struct device_attribute *da, char *buf)
+{
+    u32 status = -EPERM;
+    struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
+    sprintf(buf, "");
+
+    if (DEVICE_TYPE == attr->index)
+    {
+        status = i2c_smbus_read_byte_data(x204y_24gt_i2c_client, attr->index);
+        sprintf(buf, "%s%d", buf, status & 0x3);
+    }
+
+    return sprintf(buf, "%s\n", buf);
+}
+static ssize_t device_type_set(struct device *dev, struct device_attribute *da, const char *buf, size_t count)
+{
+    struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
+
+    u32 status = -EPERM;
+    u16 val = simple_strtol(buf, NULL, 10);
+
+    if (DEVICE_TYPE == attr->index)
+    {
+        status = i2c_smbus_write_byte_data(x204y_24gt_i2c_client, attr->index, val & 0x3);
+    }
+
+    return count;
+}
+static ssize_t poe_percent_get(struct device *dev, struct device_attribute *da, char *buf)
+{
+    u32 status = -EPERM;
+    struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
+    sprintf(buf, "");
+
+    if (POE_PERCENT == attr->index)
+    {
+        status = i2c_smbus_read_byte_data(x204y_24gt_i2c_client, attr->index);
+        sprintf(buf, "%s%d", buf, status & 0xff);
+    }
+
+    return sprintf(buf, "%s\n", buf);
+}
+static ssize_t poe_percent_set(struct device *dev, struct device_attribute *da, const char *buf, size_t count)
+{
+    struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
+
+    u32 status = -EPERM;
+    u16 val = simple_strtol(buf, NULL, 10);
+
+    if (POE_PERCENT == attr->index)
+    {
+        status = i2c_smbus_write_byte_data(x204y_24gt_i2c_client, attr->index, val % 100);
+    }
+
+    return count;
+}
 /* end of function */
 
 

@@ -37,6 +37,7 @@ SENSORS_PATH = '6-0040/X204Y_24GT_Sensor/'
 FAN_PATH = '6-0040/X204Y_24GT_FAN/'
 SFP_PATH = '6-0040/X204Y_24GT_SFP/'
 LED_PATH = '6-0040/X204Y_24GT_Led/'
+SYS_PATH = '6-0040/X204Y_24GT_SYS/'
 
 def doBash(cmd):
 	status, output = subprocess.getstatusoutput(cmd)

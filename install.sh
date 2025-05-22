@@ -3,8 +3,9 @@
 COMMIT_ID='88617c7765e90837e5ff8f1a9d16984e977675a3'
 current_path=$(pwd)
 SONIC_BUILD_PATH=$(dirname "$current_path")
-
+cd $SONIC_BUILD_PATH/
 current_commit_id=$(git rev-parse HEAD)
+cd $current_path
 
 if [ "${current_commit_id}" != "$COMMIT_ID" ]; then
     echo "must rebase to $COMMIT_ID"

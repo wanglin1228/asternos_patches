@@ -76,6 +76,7 @@ PSE_PORT_LIST = {
 
 MCU_SYSFILE_PATH        = '/sys/bus/i2c/devices/2-0070/'
 SYSFILE_PATH            = '/sys/bus/i2c/devices/'
+SYS_PATH                = '/sys/bus/i2c/devices/3-0075/'
 
 
 
@@ -344,6 +345,12 @@ def pse_status():
     print('')
     return
 
+def system_info():
+    print ('SYSTEM:')
+    result = get_attr_value(SYS_PATH + 'cpld_sw_version')
+    print ("     cpld version 0x{}".format(result))
+    print ('')
+    return
 
 # ==================== CLI commands and groups ====================
 
@@ -394,6 +401,11 @@ def smartfan():
 def pse():
     """Display Platform environment pse"""
     pse_status();
+
+@show.command()
+def system():
+    """Display Platform environment system"""
+    system_info();
 
 if __name__ == "__main__":
     cli()

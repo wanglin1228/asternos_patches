@@ -282,15 +282,7 @@ static ssize_t cpld_byte_get(struct device *dev, struct device_attribute *da, ch
         status = asterfusion_x20xp_cpld_read_on_lock(client->addr, attr->index);
     }
 
-    if (CPLD_VER == attr->index)
-    {
-        sprintf(buf, "%sCPLD version", buf);
-    }
-    else if (BOARD_VER == attr->index)
-    {
-       sprintf(buf, "%sBoard version", buf);
-    }
-    return sprintf(buf, "%s is %02x\n", buf, status);
+    return sprintf(buf, "%02x", status);
 }
 
 static ssize_t sys_adc1_status_get(struct device *dev, struct device_attribute *da, char *buf)

@@ -16,6 +16,9 @@
 import common 
 import poe
 
+global PSU_max_power
+PSU_max_power = 740
+
 class DeviceThread(common.threading.Thread):
 	def __init__(self,threadname, q):
 		common.threading.Thread.__init__(self,name = threadname)
@@ -64,7 +67,7 @@ class PlatformStatusThread(common.threading.Thread):
 		total_result += self.checkTempStatus()
 		total_result += self.checkFanStatus()
 		total_result += self.checkPsuStatus()
-		#total_result += self.checkPoeStatus()
+		total_result += self.checkPoeStatus()
 
 	def checkTempStatus(self):
 		return common.PASS
@@ -76,7 +79,8 @@ class PlatformStatusThread(common.threading.Thread):
 		return common.PASS
 
 	def checkPoeStatus(self):
-		poe.poe_db_update()
+		global PSU_max_power
+		poe.poe_update_percent(PSU_max_power)
 		return common.PASS
 
 def deviceInit():
@@ -89,4 +93,24 @@ def deviceInit():
 	#Set led to green
 	result = common.writeFile(common.I2C_PREFIX + common.LED_PATH  + 'led_sys', "1")
 
+	try:
+		status, output = common.doBash("decode-syseeprom -p")
+		hwsku = output
+	except:
+		hwsku = ''
+	device_type = 0
+	global PSU_max_power
+
+	if hwsku in ["CX204Y-24GT-HPW1-M-AC", "CX204Y-24GT-M-SWP2"]:
+		PSU_max_power = 370
+		device_type = 1
+	elif hwsku in ["CX204Y-24GT-HPW2-M-AC", "CX204Y-24GT-M-SWP4"]:
+		PSU_max_power = 740
+		device_type = 2
+	elif hwsku in ["CX204Y-48GT-HPW2-M-AC", "CX204Y-48GT-M-SWP4"]:
+		PSU_max_power = 740
+		device_type = 2
+
+	#Set device_type
+	result = common.writeFile(common.I2C_PREFIX + common.SYS_PATH + 'device_type', device_type)
 	return

@@ -141,7 +141,7 @@ static ssize_t read_cpld_HWversion(struct device *dev, struct device_attribute *
     data = cx206y_48t_cpld_read(client->addr, reg);
     DBG(printk(KERN_ALERT "%s - addr: 0x%x, reg: %x, data: %x\r\n", __func__, client->addr, reg, data));
 
-    return sprintf(buf, "%02x\n", (data >> 5) & 0x7);
+    return sprintf(buf, "%02x", (data >> 5) & 0x7);
 }
 
 static ssize_t read_cpld_SWversion(struct device *dev, struct device_attribute *da,
@@ -153,7 +153,7 @@ static ssize_t read_cpld_SWversion(struct device *dev, struct device_attribute *
     data = cx206y_48t_cpld_read(client->addr, reg);
     DBG(printk(KERN_ALERT "%s - addr: 0x%x, reg: %x, data: %x\r\n", __func__, client->addr, reg, data));
 
-    return sprintf(buf, "%02x\n", (data & 0x1f));
+    return sprintf(buf, "%02x", (data & 0x1f));
 }
 
 /* CPLD Register for Port LED */
@@ -836,7 +836,7 @@ static int cx206y_48t_cpld_remove(struct i2c_client *client)
     }
 
   
-    cx206y_48t_cpld_remove_client(client);  
+    cx206y_48t_cpld_remove_client(client);
     return 0;
 }
 

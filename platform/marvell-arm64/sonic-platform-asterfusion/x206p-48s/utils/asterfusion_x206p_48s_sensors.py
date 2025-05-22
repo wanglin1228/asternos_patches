@@ -29,6 +29,8 @@ TEMP_LIST = ['switch_lm75', 'cpu_lm75', 'fan_lm75_left', 'fan_lm75_right']
 
 TEMP_PATH        = '/sys/bus/i2c/devices/6-0040/X20XP_Sensor/'
 FAN_PATH         = '/sys/bus/i2c/devices/6-0040/X20XP_FAN/'
+SYS_PATH         = '/sys/bus/i2c/devices/6-0040/X20XP_SYS/'
+LED_PATH         = '/sys/bus/i2c/devices/6-0040/X20XP_Led/'
 
 
 
@@ -46,6 +48,21 @@ def get_attr_value(attr_path):
 
     retval = retval.rstrip('\r\n')
     fd.close()
+    return retval
+
+# Set sysfs attribute
+def set_attr_value(attr_path, value):
+    retval = 'ERR'
+    if not os.path.isfile(attr_path):
+        return retval
+
+    try:
+        with open(attr_path, 'r+') as fd:
+            fd.seek(0)
+            fd.write(str(value))
+    except Exception as error:
+        logging.error("Unable to open ", attr_path, " file !")
+
     return retval
 
 def sensors_temp():
@@ -144,6 +161,15 @@ def show_psu_status(path):
     print('')
     return
 
+def system_info():
+    print('CPLD:')
+    result = get_attr_value(SYS_PATH + 'cpld_version')
+    print("     cpld version 0x{}".format(result))
+    result = get_attr_value(SYS_PATH + 'board_version')
+    print("     board version 0x{}".format(result))
+    print('')
+    return
+
 # ==================== CLI commands and groups ====================
 
 # This is our main entrypoint - the main 'environment' command
@@ -151,6 +177,17 @@ def show_psu_status(path):
 def cli():
     """environment - Command line utility for power voltage fans temps read set"""
     pass
+
+# 'config' subgroup
+@cli.group()
+def config():
+    """Config status of platform environment"""
+    pass
+
+@config.command()
+def switch_finish():
+    """Config Platform environment switch_finish"""
+    set_attr_value(LED_PATH + 'switch_finish', 1)
 
 # 'show' subgroup
 @cli.group()
@@ -175,6 +212,11 @@ def temps():
 def powers():
     """Display Platform environment powers"""
     psu_status()
+
+@show.command()
+def system():
+    """Display Platform environment system"""
+    system_info();
 
 if __name__ == "__main__":
     cli()

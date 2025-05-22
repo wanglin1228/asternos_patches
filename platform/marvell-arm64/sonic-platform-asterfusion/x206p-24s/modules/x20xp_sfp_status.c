@@ -131,7 +131,6 @@ static ssize_t get_sfp_present(struct device *dev, struct device_attribute *da,
     asterfusion_x20xp_read_lock();
     DBG(printk(KERN_ALERT "%s - asterfusion_x20xp_read_lock for interface %d!\n", __func__, attr->index));
 
-    asterfusion_x20xp_cpld_reset();
     GET_SFP_STATUS_SCL_ADDRESS(attr->index, reg, data);
     asterfusion_x20xp_cpld_write(reg, SFP_SCL_BASE, data);
 
@@ -139,6 +138,7 @@ static ssize_t get_sfp_present(struct device *dev, struct device_attribute *da,
     // DBG(printk(KERN_ALERT "%s - addr: 0x%x, reg: %x, data: %x\r\n", __func__, client->addr, SFP_PRESENT_BASE, data));
     GET_BIT(data, (attr->index % 4), val);
 
+    asterfusion_x20xp_cpld_write(reg, SFP_SCL_BASE, 0);
     asterfusion_x20xp_read_unlock();
     DBG(printk(KERN_ALERT "%s - asterfusion_x20xp_read_unlock for interface %d!\n", __func__, attr->index));
 
@@ -155,7 +155,6 @@ static ssize_t get_qsfp_present(struct device *dev, struct device_attribute *da,
     asterfusion_x20xp_read_lock();
     DBG(printk(KERN_ALERT "%s - asterfusion_x20xp_read_lock for interface %d!\n", __func__, attr->index));
 
-    asterfusion_x20xp_cpld_reset();
     GET_QSFP_STATUS_SCL_ADDRESS(attr->index, reg, data);
     asterfusion_x20xp_cpld_write(reg, SFP_SCL_BASE, data);
 
@@ -163,6 +162,7 @@ static ssize_t get_qsfp_present(struct device *dev, struct device_attribute *da,
     // DBG(printk(KERN_ALERT "%s - addr: 0x%x, reg: %x, data: %x\r\n", __func__, client->addr, QSFP_PRESENT_BASE, data));
     GET_BIT(data, (attr->index % 6), val);
 
+    asterfusion_x20xp_cpld_write(reg, SFP_SCL_BASE, 0);
     asterfusion_x20xp_read_unlock();
     DBG(printk(KERN_ALERT "%s - asterfusion_x20xp_read_unlock for interface %d!\n", __func__, attr->index));
 
@@ -178,7 +178,6 @@ static ssize_t get_sfp_rx_loss(struct device *dev, struct device_attribute *da,
 
     asterfusion_x20xp_read_lock();
 
-    asterfusion_x20xp_cpld_reset();
     GET_SFP_STATUS_SCL_ADDRESS(attr->index, reg, data);
     asterfusion_x20xp_cpld_write(reg, SFP_SCL_BASE, data);
 
@@ -186,6 +185,7 @@ static ssize_t get_sfp_rx_loss(struct device *dev, struct device_attribute *da,
     DBG(printk(KERN_ALERT "%s - addr: 0x%x, reg: %x, data: %x\r\n", __func__, client->addr, SFP_RX_LOSS_BASE, data));
     GET_BIT(data, ((attr->index % 4) + 4), val);
 
+    asterfusion_x20xp_cpld_write(reg, SFP_SCL_BASE, 0);
     asterfusion_x20xp_read_unlock();
 
     return sprintf(buf, "%d\n", val);
@@ -200,7 +200,6 @@ static ssize_t get_sfp_tx_disable(struct device *dev, struct device_attribute *d
 
     asterfusion_x20xp_read_lock();
 
-    asterfusion_x20xp_cpld_reset();
     GET_SFP_STATUS_SCL_ADDRESS(attr->index, reg, data);
     asterfusion_x20xp_cpld_write(reg, SFP_SCL_BASE, data);
 
@@ -208,6 +207,7 @@ static ssize_t get_sfp_tx_disable(struct device *dev, struct device_attribute *d
     DBG(printk(KERN_ALERT "%s - addr: 0x%x, reg: %x, data: %x\r\n", __func__, client->addr, SFP_TX_CTRL_BASE, data));
     GET_BIT(data, (attr->index % 4), val);
 
+    asterfusion_x20xp_cpld_write(reg, SFP_SCL_BASE, 0);
     asterfusion_x20xp_read_unlock();
 
     return sprintf(buf, "%d\n", val);
@@ -228,7 +228,6 @@ static ssize_t set_sfp_tx_disable(struct device *dev, struct device_attribute *d
 
     asterfusion_x20xp_read_lock();
 
-    asterfusion_x20xp_cpld_reset();
     GET_SFP_STATUS_SCL_ADDRESS(attr->index, reg, data);
     asterfusion_x20xp_cpld_write(reg, SFP_SCL_BASE, data);
 
@@ -242,6 +241,7 @@ static ssize_t set_sfp_tx_disable(struct device *dev, struct device_attribute *d
 
     i2c_smbus_write_byte_data(client, reg, data);
 
+    asterfusion_x20xp_cpld_write(reg, SFP_SCL_BASE, 0);
     asterfusion_x20xp_read_unlock();
 
     return count;
@@ -405,6 +405,7 @@ static int x20xp_xxs_sfp_status_device_probe(struct i2c_client *client, const st
         goto exit;
     }
 
+    asterfusion_x20xp_cpld_reset();
     return 0;
 
 exit:

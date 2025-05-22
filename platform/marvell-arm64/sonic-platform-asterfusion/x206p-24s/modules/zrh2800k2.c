@@ -139,7 +139,7 @@ static struct _OPERATION_SET_ operation_set[] = {
 };
 
 
-static void zrh2800k2_remove(struct i2c_client *client);
+static int zrh2800k2_remove(struct i2c_client *client);
 static int zrh2800k2_probe(struct i2c_client *client, const struct i2c_device_id *dev_id);
 static ssize_t show_value(struct device *dev, struct device_attribute *da, char *buf);
 

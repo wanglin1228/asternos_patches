@@ -14,6 +14,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import common, device
+import os, sys, stat
+
 
 HOST = ''
 SOCKET_LIST = []
@@ -23,76 +25,76 @@ THREADS = []
 FUNCS = {}
 
 class GlobalThread(common.threading.Thread):
-	def __init__(self,threadname, q):
-		common.threading.Thread.__init__(self,name = threadname)
-		self.queue = q
+    def __init__(self,threadname, q):
+        common.threading.Thread.__init__(self,name = threadname)
+        self.queue = q
 
-	def run(self):
-		while common.RUN:
-			message = self.queue.get()
-			self.onMessage(message)
-	def onMessage(self, message):
-		"""
-		Commands:
-			uninstall	: Uninstall platform drivers
-		"""
-		if len(message.command) < 1:
-			result = self.onMessage.__doc__
-		else:
-			if message.command[0] == 'uninstall':
-				common.RUN = False
-				doUninstall()
-				result = 'Success'
-			else:
-				result = self.onMessage.__doc__
-		if (message.callback is not None):
-			message.callback(result)
+    def run(self):
+        while common.RUN:
+            message = self.queue.get()
+            self.onMessage(message)
+    def onMessage(self, message):
+        """
+        Commands:
+            uninstall	: Uninstall platform drivers
+        """
+        if len(message.command) < 1:
+            result = self.onMessage.__doc__
+        else:
+            if message.command[0] == 'uninstall':
+                common.RUN = False
+                doUninstall()
+                result = 'Success'
+            else:
+                result = self.onMessage.__doc__
+        if (message.callback is not None):
+            message.callback(result)
 
 class messageObject(object):
-	def __init__(self, command, callback):
-		super(messageObject, self).__init__()
-		self.command = command
-		self.callback = callback
+    def __init__(self, command, callback):
+        super(messageObject, self).__init__()
+        self.command = command
+        self.callback = callback
 
 def callback(sock, result):
-	sock.sendall(result)
+    sock.sendall(result)
 
 def messageHandler():
-	server_socket = common.socket.socket(common.socket.AF_INET, common.socket.SOCK_STREAM)
-	server_socket.setsockopt(common.socket.SOL_SOCKET, common.socket.SO_REUSEADDR, 1)
-	server_socket.bind((HOST, common.SOCKET_PORT))
-	server_socket.listen(SOCKET_MAX_CLIENT)
-	SOCKET_LIST.append(server_socket)
+    server_socket = common.socket.socket(common.socket.AF_INET, common.socket.SOCK_STREAM)
+    server_socket.setsockopt(common.socket.SOL_SOCKET, common.socket.SO_REUSEADDR, 1)
+    server_socket.bind((HOST, common.SOCKET_PORT))
+    server_socket.listen(SOCKET_MAX_CLIENT)
+    SOCKET_LIST.append(server_socket)
 
-	while(common.RUN):
-		ready_to_read,ready_to_write,in_error = common.select.select(SOCKET_LIST,[],[],0)
-		for sock in ready_to_read:
-			if sock == server_socket:
-				sockfd, addr = server_socket.accept()
-				SOCKET_LIST.append(sockfd)
-			else:
-				try:
-					data = sock.recv(common.SOCKET_RECV_BUFFER)
-					if data:
-						cb = common.partial(callback, sock)
-						cmdlist = data.split()
+    while(common.RUN):
+        ready_to_read,ready_to_write,in_error = common.select.select(SOCKET_LIST,[],[],0)
+        for sock in ready_to_read:
+            if sock == server_socket:
+                sockfd, addr = server_socket.accept()
+                SOCKET_LIST.append(sockfd)
+            else:
+                try:
+                    data = sock.recv(common.SOCKET_RECV_BUFFER)
+                    if data:
+                        cb = common.partial(callback, sock)
+                        cmdlist = data.split()
 
-						if cmdlist[0] not in common.CMD_TYPE:
-							callback(sock, 'Fail')
-							continue
-						
-						msg = messageObject(cmdlist[1:], cb)
-						FUNCS[cmdlist[0]].put(msg)
-						continue
-					else:
-						if sock in SOCKET_LIST:
-							SOCKET_LIST.remove(sock)
-				except:
-					raise
-					continue
-		common.time.sleep(0.2)
+                        if cmdlist[0] not in common.CMD_TYPE:
+                            callback(sock, 'Fail')
+                            continue
+                        
+                        msg = messageObject(cmdlist[1:], cb)
+                        FUNCS[cmdlist[0]].put(msg)
+                        continue
+                    else:
+                        if sock in SOCKET_LIST:
+                            SOCKET_LIST.remove(sock)
+                except:
+                    raise
+                    continue
+        common.time.sleep(0.2)
 
-	server_socket.close()
+    server_socket.close()
 
 KERNEL_MODULE = [
 'i2c_dev',
@@ -115,19 +117,19 @@ def checkDriver():
     return
 
 i2c_topology_dict=[
-	{'bus': "i2c-0", 'driver' : "24c02", 'address': "0x53"},
-	{'bus': "i2c-0", 'driver' : "lm75", 'address': "0x48"},
-	{'bus': "i2c-0", 'driver' : "lm75", 'address': "0x4f"},
-	{'bus': "i2c-0", 'driver' : "cx204y_48s_cpld", 'address': "0x30"},
-	{'bus': "i2c-1", 'driver' : "cx204y_48s_cpld", 'address': "0x70"},
-	{'bus': "i2c-1", 'driver' : "cx204y_48s_cpld", 'address': "0x71"},
-	{'bus': "i2c-1", 'driver' : "cx204y_48s_cpld", 'address': "0x72"},
-	{'bus': "i2c-1", 'driver' : "cx204y_48s_cpld", 'address': "0x73"},
-	{'bus': "i2c-1", 'driver' : "cx204y_48s_cpld", 'address': "0x74"},
-	{'bus': "i2c-1", 'driver' : "cx204y_48s_cpld", 'address': "0x75"},
-	{'bus': "i2c-1", 'driver' : "cx204y_48s_cpld", 'address': "0x76"},
-	{'bus': "i2c-1", 'driver' : "cx204y_48s_sfp", 'address': "0x50"},
-	{'bus': "i2c-1", 'driver' : "cx204y_48s_sfp2", 'address': "0x20"}
+    {'bus': "i2c-0", 'driver' : "24c02", 'address': "0x53"},
+    {'bus': "i2c-0", 'driver' : "lm75", 'address': "0x48"},
+    {'bus': "i2c-0", 'driver' : "lm75", 'address': "0x4f"},
+    {'bus': "i2c-0", 'driver' : "cx204y_48s_cpld", 'address': "0x30"},
+    {'bus': "i2c-1", 'driver' : "cx204y_48s_cpld", 'address': "0x70"},
+    {'bus': "i2c-1", 'driver' : "cx204y_48s_cpld", 'address': "0x71"},
+    {'bus': "i2c-1", 'driver' : "cx204y_48s_cpld", 'address': "0x72"},
+    {'bus': "i2c-1", 'driver' : "cx204y_48s_cpld", 'address': "0x73"},
+    {'bus': "i2c-1", 'driver' : "cx204y_48s_cpld", 'address': "0x74"},
+    {'bus': "i2c-1", 'driver' : "cx204y_48s_cpld", 'address': "0x75"},
+    {'bus': "i2c-1", 'driver' : "cx204y_48s_cpld", 'address': "0x76"},
+    {'bus': "i2c-1", 'driver' : "cx204y_48s_sfp", 'address': "0x50"},
+    {'bus': "i2c-1", 'driver' : "cx204y_48s_sfp2", 'address': "0x20"}
 ]
 
 def doInstall():
@@ -136,44 +138,46 @@ def doInstall():
     for o in i2c_topology_dict:
         status, output = common.doBash("echo " + o['driver'] + " " + o['address'] + " > " + common.I2C_PREFIX + o['bus'] + "/new_device")
     status, output = common.doBash("sysctl -w net.mpls.platform_labels=1048575")
+    if os.path.exists("/sys/bus/i2c/drivers/pca954x"):
+        status, output = common.doBash("echo -2 | tee /sys/bus/i2c/drivers/pca954x/*-00*/idle_state")
     return
 
 def setupThreads():
-	global THREADS, QUEUES
+    global THREADS, QUEUES
 
-	# Queues
-	# Global
-	queueGlobal = common.queue.Queue()
-	QUEUES.append(queueGlobal)
-	FUNCS['global'] = queueGlobal
+    # Queues
+    # Global
+    queueGlobal = common.queue.Queue()
+    QUEUES.append(queueGlobal)
+    FUNCS['global'] = queueGlobal
 
-	# Device
-	queueDevice = common.queue.Queue()
-	QUEUES.append(queueDevice)
-	FUNCS['device'] = queueDevice
+    # Device
+    queueDevice = common.queue.Queue()
+    QUEUES.append(queueDevice)
+    FUNCS['device'] = queueDevice
 
-	# Threads
-	# Global
-	threadGlobal = GlobalThread('Global Handler', queueGlobal)
-	THREADS.append(threadGlobal)	
+    # Threads
+    # Global
+    threadGlobal = GlobalThread('Global Handler', queueGlobal)
+    THREADS.append(threadGlobal)	
 
-	# Device
-	threadDevice = device.DeviceThread('Device Handler', queueDevice)
-	THREADS.append(threadDevice)
+    # Device
+    threadDevice = device.DeviceThread('Device Handler', queueDevice)
+    THREADS.append(threadDevice)
 
-	# Check platform status
-	threadPlatformStatus = device.PlatformStatusThread('Platform Status Handler', 10)
-	THREADS.append(threadPlatformStatus)
+    # Check platform status
+    threadPlatformStatus = device.PlatformStatusThread('Platform Status Handler', 10)
+    THREADS.append(threadPlatformStatus)
 def functionInit():
-	setupThreads()
-	for thread in THREADS:
+    setupThreads()
+    for thread in THREADS:
                 thread.start()
-	return
+    return
 
 def deviceInit():
-	msg = messageObject(['init'], None)
-	FUNCS['device'].put(msg)
-	return
+    msg = messageObject(['init'], None)
+    FUNCS['device'].put(msg)
+    return
 
 def do_platformApiInstall():
     print("Platform API Install....")
@@ -189,20 +193,20 @@ def doUninstall():
     return
 
 def main(): #start 20200219
-	args = common.sys.argv[1:]
+    args = common.sys.argv[1:]
 
-	if len(args[0:]) < 1:
-		common.sys.exit(0)
+    if len(args[0:]) < 1:
+        common.sys.exit(0)
 
-	if args[0] == 'install':
-		common.RUN = True
-		doInstall()
-		do_platformApiInstall()
-		functionInit()
-		deviceInit()
-		messageHandler()
-	
-	common.sys.exit(0)
+    if args[0] == 'install':
+        common.RUN = True
+        doInstall()
+        do_platformApiInstall()
+        functionInit()
+        deviceInit()
+        messageHandler()
+    
+    common.sys.exit(0)
 
 if __name__ == "__main__":
-	main()
+    main()

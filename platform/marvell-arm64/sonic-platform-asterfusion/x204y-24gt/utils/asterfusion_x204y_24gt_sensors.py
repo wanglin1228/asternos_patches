@@ -23,6 +23,7 @@ TEMP_LIST = ['ac5x_lm75']
 
 TEMP_PATH        = '/sys/bus/i2c/devices/6-0040/X204Y_24GT_Sensor/'
 FAN_PATH         = '/sys/bus/i2c/devices/6-0040/X204Y_24GT_FAN/'
+SYS_PATH         = '/sys/bus/i2c/devices/6-0040/X204Y_24GT_SYS/'
 
 
 
@@ -54,11 +55,31 @@ def sensors_temp():
 
 
 def fan_speed():
-    print('FAN SPEED:')
+    result = get_attr_value(FAN_PATH + 'fan_num')
+    fan_num = 0
+    try:
+        fan_num = int(result,10)
+    except:
+        pass
+    if fan_num != 2:
+        fan_num = MAX_FAN_NUM
+    print ('FAN SPEED:')
     for x in FAN_LIST:
         result = get_attr_value(FAN_PATH + x)
         speed = int(result) * 60
         print("    {} is {} RPM".format(x, speed))
+        fan_num -= 1
+        if fan_num <= 0:
+            break
+    print('')
+    return
+
+def system_info():
+    print('SYSTEM:')
+    result = get_attr_value(SYS_PATH + 'cpld_version')
+    print("     cpld version 0x{}".format(result))
+    result = get_attr_value(SYS_PATH + 'board_version')
+    print("     board version 0x{}".format(result))
     print('')
     return
 
@@ -87,6 +108,11 @@ def fans():
 def temps():
     """Display Platform environment temps"""
     sensors_temp();
+
+@show.command()
+def system():
+    """Display Platform environment system"""
+    system_info();
 
 if __name__ == "__main__":
     cli()
